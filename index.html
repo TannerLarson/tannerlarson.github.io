@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 0 20px;
+            line-height: 1.6;
+        }
+        nav {
+            margin: 30px 0;
+            padding: 20px;
+            background: #f5f5f5;
+            border-radius: 8px;
+        }
+        nav ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        nav li {
+            margin: 10px 0;
+        }
+        nav a {
+            color: #0066cc;
+            text-decoration: none;
+            font-size: 18px;
+        }
+        nav a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <h1>Welcome</h1>
+    <p>This is the homepage.</p>
+
+    <nav id="subpage-nav">
+        <h2>Subpages</h2>
+        <ul id="page-list"></ul>
+    </nav>
+
+    <script src="/js/pages-config.js"></script>
+    <script>
+        // Dynamically generate navigation links from config
+        const pageList = document.getElementById('page-list');
+
+        PAGES.forEach(page => {
+            const li = document.createElement('li');
+            const a = document.createElement('a');
+            a.href = page.path;
+            a.textContent = page.title;
+            li.appendChild(a);
+            pageList.appendChild(li);
+        });
+    </script>
+</body>
+</html>
