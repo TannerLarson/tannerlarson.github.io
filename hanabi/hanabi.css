@@ -1,0 +1,129 @@
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 2rem;
+    line-height: 1.6;
+}
+
+h1 {
+    color: #333;
+}
+
+.card {
+    min-width: 120px;
+    min-height: 168px;
+    border: 2px solid #333;
+    border-radius: 8px;
+    background: white;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    display: inline-block;
+    margin: 0.5rem;
+    position: relative;
+    /* This helps with positioning the button */
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    /* Pushes button to bottom */
+    padding: 0.5rem;
+    background-color: #ccc;
+}
+
+.hint-card {
+    max-width: 230px;
+}
+
+.play-card-btn,
+.apply-hint-btn {
+    width: 100%;
+    padding: 0.5rem;
+    cursor: pointer;
+    border: 1px solid #333;
+    background: #f0f0f0;
+    border-radius: 4px;
+}
+
+.card-select {
+    margin-bottom: 0.5rem;
+}
+
+.checkbox-label-row,
+.checkbox-input-row {
+    display: flex;
+    justify-content: space-between;
+}
+
+.checkbox-label-row {
+    padding-left: 1.2rem;
+    padding-right: 1.2rem;
+}
+
+.checkbox-label {
+    width: 2.5rem;
+    /* Same as badge width */
+    text-align: center;
+    font-size: 0.8rem;
+}
+
+.card-checkbox {
+    width: 2.5rem;
+    cursor: pointer;
+    text-align: center;
+}
+
+#card-container,
+#hint-card-container {
+    display: flex;
+    justify-content: center;
+    margin-top: 2rem;
+    flex-wrap: wrap;
+}
+
+.card-title {
+    text-align: center;
+    text-decoration: underline;
+}
+
+.section-label {
+    font-size: 0.8rem;
+    font-weight: bold;
+    margin-bottom: 0.25rem;
+}
+
+.color-badges,
+.number-badges {
+    display: flex;
+    gap: 0.25rem;
+    flex-wrap: wrap;
+}
+
+.badge {
+    width: 2.5rem;
+    height: 2.5rem;
+    padding: 0;
+    text-align: center;
+    border: 1px solid #333;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    user-select: none;
+}
+
+/* Possible state - normal appearance */
+.badge[data-state="possible"] {
+    background: white;
+    color: #333;
+}
+
+/* Eliminated state - grayed out and struck through */
+.badge[data-state="eliminated"] {
+    background: #ddd;
+    color: #999;
+    text-decoration: line-through;
+}
+
+/* Confirmed state - highlighted */
+.badge[data-state="confirmed"] {
+    background: white;
+    font-weight: bold;
+}

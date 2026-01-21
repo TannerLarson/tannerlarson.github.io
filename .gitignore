@@ -1,0 +1,5 @@
+# For GitHub Pages, we need to commit the pkg/ directory
+# Normally you'd add it to .gitignore, but GitHub Pages needs it
+
+hanabi/target/
+hanabi/Cargo.lock

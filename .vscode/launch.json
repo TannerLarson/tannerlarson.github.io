@@ -1,0 +1,18 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Launch Website",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "open",
+      "runtimeArgs": ["http://localhost:8000"],
+      "preLaunchTask": "Start Dev Server",
+      "serverReadyAction": {
+        "pattern": "Serving HTTP on",
+        "uriFormat": "http://localhost:8000",
+        "action": "openExternally"
+      }
+    }
+  ]
+}

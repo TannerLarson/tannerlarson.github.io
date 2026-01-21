@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hanabi</title>
+    <link rel="stylesheet" href="hanabi.css">
+</head>
+
+<body>
+    <h1>Hanabi Hand Tracker</h1>
+    <div class="player-select">
+        <h2>Select Number of Players</h2>
+        <button id="players-2-3">2-3 Players</button>
+        <button id="players-4-5">4-5 Players</button>
+        <template id="card-template">
+            <div class="card">
+                <div class="card-title"></div>
+                <div class="card-info">
+                    <div class="color-badges"></div>
+                    <div class="number-badges"></div>
+                </div>
+                <button class="play-card-btn">Play Card</button>
+            </div>
+        </template>
+        <template id="hint-card-template">
+            <div class="card hint-card">
+                <div class="card-title"></div>
+                <div class="card-info">
+                    <div class="card-select"></div>
+                    <div class="color-badges"></div>
+                    <div class="number-badges"></div>
+                </div>
+                <button class="apply-hint-btn">Apply Hint</button>
+            </div>
+        </template>
+    </div>
+    <script src="hanabi.js"></script>
+    <div id="card-container"></div>
+    <div id="hint-card-container"></div>
+</body>
+
+</html>

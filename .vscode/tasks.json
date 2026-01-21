@@ -1,0 +1,31 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start Dev Server",
+      "type": "shell",
+      "command": "python3 -m http.server 8000",
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "Open Browser",
+      "type": "shell",
+      "command": "open http://localhost:8000",
+      "problemMatcher": []
+    },
+    {
+      "label": "Start Server & Open Browser",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "Start Dev Server",
+        "Open Browser"
+      ],
+      "problemMatcher": []
+    }
+  ]
+}
