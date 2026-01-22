@@ -4,5 +4,5 @@
 // 2. Create the corresponding directory and index.html
 const PAGES = [
     { path: '/hanabi', title: 'Hanabi Card Tracker' },
-    { path: '/page2', title: 'Page 2' }
+    { path: '/ti-calculator', title: 'Twilight Imperium Calculator' }
 ];
