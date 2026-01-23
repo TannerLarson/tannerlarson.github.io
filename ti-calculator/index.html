@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Twilight Imperium Battle Calculator</title>
+    <link rel="stylesheet" href="ti-calculator.css">
+  </head>
+  <body>
+    <template id="counter-tpl">
+      <div class="counter">
+        <button class="decrease-unit-btn" onclick="decreaseCount(this)">-</button>
+        <div class="count">4</div>
+        <button class="increase-unit-btn" onclick="increaseCount(this)">+</button>
+      </div>
+    </template>
+    <template id="row-tpl">
+      <div class="unit-row">
+        <div class="defender-counter"></div>
+        <div class="unit-description">
+          <div class="unit-name"></div>
+          <img class="unit-image">
+        </div>
+        <div class="attacker-counter"></div>
+      </div>
+    </template>
+    <div id="unit-container"></div>
+    <script src="ti-calculator.js"></script>
+    <script>createUnitRows();</script>
+    <button id="reset-units-btn" onclick="resetUnitCount();">Reset</button>
+  </body>
+</html>
