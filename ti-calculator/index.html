@@ -9,19 +9,24 @@
   <body>
     <template id="counter-tpl">
       <div class="counter">
-        <button class="decrease-unit-btn">-</button>
+        <button class="decrease-unit-btn" onclick="decreaseCount(this)">-</button>
         <div class="count">4</div>
-        <button class="increase-unit-btn">+</button>
+        <button class="increase-unit-btn" onclick="increaseCount(this)">+</button>
       </div>
     </template>
     <template id="row-tpl">
       <div class="unit-row">
         <div class="defender-counter"></div>
-        <div class="unit-name"></div>
+        <div class="unit-description">
+          <div class="unit-name"></div>
+          <img class="unit-image">
+        </div>
         <div class="attacker-counter"></div>
       </div>
     </template>
     <div id="unit-container"></div>
     <script src="ti-calculator.js"></script>
+    <script>createUnitRows();</script>
+    <button id="reset-units-btn" onclick="resetUnitCount();">Reset</button>
   </body>
 </html>
