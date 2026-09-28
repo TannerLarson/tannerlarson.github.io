@@ -129,13 +129,19 @@ form.addEventListener("submit", async (e) => {
 
     setStatus("Looking up commander(s) on Scryfall…");
     const commanders = [];
-    for (const name of [name1, name2].filter(Boolean)) {
+    const inputs = [
+      { el: commander1, name: name1 },
+      { el: commander2, name: name2 },
+    ].filter((x) => x.name);
+    for (const { el, name } of inputs) {
       const card = await lookupCard(name);
       if (!canBeCommander(card)) {
         throw new Error(
           `"${card.name}" is not a valid commander (need a legendary creature, partner/background, or similar).`
         );
       }
+      // Reflect the resolved Scryfall name (helps with DFCs / typos).
+      el.value = card.name;
       commanders.push(card);
     }
 

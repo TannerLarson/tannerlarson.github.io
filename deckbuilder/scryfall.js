@@ -12,24 +12,65 @@ async function scryfallFetch(url, options = {}) {
     ...options,
     headers: { ...headers, ...(options.headers || {}) },
   });
-  if (res.status === 404) {
-    const err = new Error("Card not found on Scryfall");
-    err.code = "NOT_FOUND";
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(
+      data.details || data.error || `Scryfall error ${res.status}`
+    );
+    err.code = res.status === 404 ? "NOT_FOUND" : "ERROR";
+    err.status = res.status;
+    err.scryfall = data;
     throw err;
   }
-  if (!res.ok) {
-    throw new Error(`Scryfall error ${res.status}`);
-  }
-  return res.json();
+  return data;
 }
 
 /**
- * Fuzzy named lookup.
+ * Resolve a card name via fuzzy named lookup, then Scryfall search.
+ * Uses a unique match even when the typed text is incomplete
+ * (e.g. "Isilu" → Eirdu, Carrier of Dawn // Isilu, Carrier of Twilight).
+ * If search returns several cards but only one can be a commander, use that.
  * @param {string} name
  */
 export async function lookupCard(name) {
-  const url = `${SCRYFALL}/cards/named?fuzzy=${encodeURIComponent(name.trim())}`;
-  return scryfallFetch(url);
+  const q = name.trim();
+  if (!q) throw new Error("Empty card name");
+
+  try {
+    return await scryfallFetch(
+      `${SCRYFALL}/cards/named?fuzzy=${encodeURIComponent(q)}`
+    );
+  } catch (e) {
+    if (e.code !== "NOT_FOUND") throw e;
+  }
+
+  let data;
+  try {
+    data = await scryfallFetch(
+      `${SCRYFALL}/cards/search?q=${encodeURIComponent(q)}`
+    );
+  } catch (e) {
+    if (e.code === "NOT_FOUND") {
+      throw new Error(`No Scryfall match for "${q}"`);
+    }
+    throw e;
+  }
+
+  const cards = data.data || [];
+  if (cards.length === 1) return cards[0];
+
+  const asCommanders = cards.filter(canBeCommander);
+  if (asCommanders.length === 1) return asCommanders[0];
+
+  const sample = cards
+    .slice(0, 5)
+    .map((c) => c.name)
+    .join(", ");
+  throw new Error(
+    `Ambiguous name "${q}" (${cards.length} matches` +
+      `${asCommanders.length ? `, ${asCommanders.length} possible commanders` : ""}): ` +
+      `${sample}${cards.length > 5 ? "…" : ""}`
+  );
 }
 
 /**
@@ -50,17 +91,41 @@ export function canBeCommander(card) {
     "Choose a Background",
     "Doctor's companion",
   ];
-  if (keywords.some((k) => commanderKeywords.some((ck) => k.toLowerCase() === ck.toLowerCase()))) {
+  if (
+    keywords.some((k) =>
+      commanderKeywords.some((ck) => k.toLowerCase() === ck.toLowerCase())
+    )
+  ) {
     return true;
   }
 
-  // Background enchantments / similar: Legendary + Enchantment — Background
   if (/\bLegendary\b/i.test(type) && /\bBackground\b/i.test(type)) return true;
 
-  const oracle = (card.oracle_text || "").toLowerCase();
+  const oracle = oracleText(card).toLowerCase();
   if (oracle.includes("can be your commander")) return true;
 
   return false;
+}
+
+/** @param {object} card */
+function oracleText(card) {
+  if (card.oracle_text) return card.oracle_text;
+  if (Array.isArray(card.card_faces)) {
+    return card.card_faces.map((f) => f.oracle_text || "").join("\n");
+  }
+  return "";
+}
+
+/**
+ * Mana cost string for pip counting (joins DFC faces when needed).
+ * @param {object} card
+ */
+export function cardManaCost(card) {
+  if (card?.mana_cost) return card.mana_cost;
+  if (Array.isArray(card?.card_faces)) {
+    return card.card_faces.map((f) => f.mana_cost || "").join("");
+  }
+  return "";
 }
 
 /**
@@ -86,9 +151,14 @@ export async function fetchCollection(names) {
     for (const card of data.data || []) {
       byName.set(card.name.toLowerCase(), card);
       byName.set(card.name, card);
+      // Also index front face for DFC lookups
+      const front = card.name.split(/\s*\/\/\s*/)[0];
+      if (front && front !== card.name) {
+        byName.set(front.toLowerCase(), card);
+        byName.set(front, card);
+      }
     }
 
-    // Be polite between chunks
     if (i + 75 < unique.length) {
       await new Promise((r) => setTimeout(r, 100));
     }
@@ -101,8 +171,6 @@ const COLOR_PIP_RE = /\{([WUBRGC])(?:\/([WUBRGC]))?\}/gi;
 
 /**
  * Count colored pips from a mana_cost string.
- * Each monocolor symbol = 1; hybrid sides each count (e.g. {W/U} → W+1, U+1).
- * Ignores generic {N} and bare {C} for identity pip shares (C tracked but unused for basics bias).
  * @param {string} manaCost
  * @returns {Record<string, number>}
  */

@@ -17,10 +17,12 @@ const LAND_TAGS = new Set(["lands", "utilitylands"]);
 
 /**
  * EDHREC-style slug: lowercase, strip punctuation, spaces → hyphens.
+ * Uses the front face of a DFC (text before " // ").
  * @param {string} name
  */
 export function slugify(name) {
-  return name
+  const front = String(name).split(/\s*\/\/\s*/)[0];
+  return front
     .toLowerCase()
     .normalize("NFKD")
     .replace(/['’]/g, "")

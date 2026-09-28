@@ -1,4 +1,5 @@
 import {
+  cardManaCost,
   countPips,
   fetchCollection,
   mergePipCounts,
@@ -194,12 +195,12 @@ function bumpBasic(mainboard, name, qty) {
 function allocateBasics(mainboard, meta, commanders, colors, basicsNeeded) {
   let pips = { W: 0, U: 0, B: 0, R: 0, G: 0 };
   for (const cmd of commanders) {
-    pips = mergePipCounts(pips, countPips(cmd.mana_cost || ""));
+    pips = mergePipCounts(pips, countPips(cardManaCost(cmd)));
   }
   for (const card of mainboard.values()) {
     const scry = meta.get(card.name) || meta.get(card.name.toLowerCase());
     if (!scry) continue;
-    const costPips = countPips(scry.mana_cost || "");
+    const costPips = countPips(cardManaCost(scry));
     for (let i = 0; i < card.qty; i++) {
       pips = mergePipCounts(pips, costPips);
     }
