@@ -17,16 +17,22 @@ export function formatMoxfield(commanders, mainboard) {
 }
 
 /**
- * Trigger a browser download of decklist.txt.
+ * Copy decklist text to the clipboard.
  * @param {string} text
- * @param {string} [filename]
  */
-export function downloadDecklist(text, filename = "decklist.txt") {
-  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+export async function copyDecklist(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  // Fallback for older browsers / non-secure contexts
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.setAttribute("readonly", "");
+  ta.style.position = "fixed";
+  ta.style.left = "-9999px";
+  document.body.appendChild(ta);
+  ta.select();
+  document.execCommand("copy");
+  document.body.removeChild(ta);
 }

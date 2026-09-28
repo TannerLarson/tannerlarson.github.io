@@ -5,7 +5,7 @@ import {
   fetchCommanderPage,
 } from "./edhrec.js";
 import { buildDeck } from "./build.js";
-import { downloadDecklist, formatMoxfield } from "./export.js";
+import { copyDecklist, formatMoxfield } from "./export.js";
 
 const form = document.getElementById("build-form");
 const statusEl = document.getElementById("status");
@@ -13,7 +13,7 @@ const errorEl = document.getElementById("error");
 const resultsEl = document.getElementById("results");
 const previewEl = document.getElementById("deck-preview");
 const buildBtn = document.getElementById("build-btn");
-const downloadBtn = document.getElementById("download-btn");
+const copyBtn = document.getElementById("copy-btn");
 const mixHint = document.getElementById("mix-hint");
 const synergyPercentInput = document.getElementById("synergy-percent");
 const landInput = document.getElementById("land-count");
@@ -155,13 +155,21 @@ form.addEventListener("submit", async (e) => {
     previewEl.textContent = lastDeckText;
     resultsEl.hidden = false;
 
+    const BASIC_NAMES = new Set(["Plains", "Island", "Swamp", "Mountain", "Forest", "Wastes"]);
     const mainCount = deck.mainboard.reduce((n, c) => n + c.qty, 0);
-    const lands = deck.mainboard.reduce((n, c) => n + (c.isLand ? c.qty : 0), 0);
+    const landCards = deck.mainboard.filter((c) => c.isLand);
+    const basicQty = landCards
+      .filter((c) => BASIC_NAMES.has(c.name))
+      .reduce((n, c) => n + c.qty, 0);
+    const nonbasicQty = landCards
+      .filter((c) => !BASIC_NAMES.has(c.name))
+      .reduce((n, c) => n + c.qty, 0);
     const gcs = deck.mainboard.reduce((n, c) => n + (c.isGameChanger ? c.qty : 0), 0);
     const syn = deck.options.synergyNonLands;
     const inc = deck.options.inclusionNonLands;
     setStatus(
-      `Done — ${commanders.map((c) => c.name).join(" + ")} · ${syn} synergy + ${inc} inclusion · ${lands} lands · ${gcs} game changers · ${mainCount + commanders.length} total.`
+      `Done — ${commanders.map((c) => c.name).join(" + ")} · ${syn} synergy + ${inc} inclusion · ` +
+        `${nonbasicQty} nonbasic lands + ${basicQty} basics · ${gcs} game changers · ${mainCount + commanders.length} total.`
     );
   } catch (err) {
     console.error(err);
@@ -172,7 +180,17 @@ form.addEventListener("submit", async (e) => {
   }
 });
 
-downloadBtn.addEventListener("click", () => {
+copyBtn.addEventListener("click", async () => {
   if (!lastDeckText) return;
-  downloadDecklist(lastDeckText);
+  const label = copyBtn.textContent;
+  try {
+    await copyDecklist(lastDeckText);
+    copyBtn.textContent = "Copied!";
+  } catch (err) {
+    console.error(err);
+    copyBtn.textContent = "Copy failed";
+  }
+  setTimeout(() => {
+    copyBtn.textContent = label;
+  }, 1500);
 });

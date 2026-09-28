@@ -11,7 +11,7 @@
     <h1>EDH Deckbuilder</h1>
     <p class="lede">
       Build a 100-card Commander list from EDHREC: walk synergy then inclusion (lands included along the way),
-      then top up the remaining slots with pip-biased basics. Download a Moxfield-importable decklist.
+      then top up the remaining slots with pip-biased basics. Copy a Moxfield-importable decklist.
     </p>
 
     <form id="build-form" class="build-form">
@@ -62,7 +62,7 @@
     <section id="results" class="results" hidden>
       <div class="results-header">
         <h2>Deck</h2>
-        <button type="button" id="download-btn">Download decklist.txt</button>
+        <button type="button" id="copy-btn">Copy decklist</button>
       </div>
       <pre id="deck-preview" class="deck-preview"></pre>
     </section>
@@ -93,7 +93,7 @@
         </li>
         <li>
           <strong>Filters:</strong> game changers are capped at your max; tutors are skipped unless you allow them.
-          Output is a Moxfield-importable <code>decklist.txt</code>.
+          Output is a Moxfield-importable decklist you can copy.
         </li>
       </ol>
     </section>
