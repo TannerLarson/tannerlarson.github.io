@@ -1,5 +1,9 @@
 import { canBeCommander, lookupCard } from "./scryfall.js";
-import { buildUngroupedPool, fetchCommanderPage } from "./edhrec.js";
+import {
+  buildUngroupedPool,
+  extractGameChangerNames,
+  fetchCommanderPage,
+} from "./edhrec.js";
 import { buildDeck } from "./build.js";
 import { downloadDecklist, formatMoxfield } from "./export.js";
 
@@ -14,6 +18,8 @@ const mixHint = document.getElementById("mix-hint");
 const synergyInput = document.getElementById("synergy-count");
 const inclusionInput = document.getElementById("inclusion-count");
 const landInput = document.getElementById("land-count");
+const maxGameChangersInput = document.getElementById("max-game-changers");
+const allowTutorsInput = document.getElementById("allow-tutors");
 const commander1 = document.getElementById("commander-1");
 const commander2 = document.getElementById("commander-2");
 
@@ -52,13 +58,15 @@ function readMix() {
     synergyNonLands: Number.parseInt(synergyInput.value, 10),
     inclusionNonLands: Number.parseInt(inclusionInput.value, 10),
     targetLands: Number.parseInt(landInput.value, 10),
+    maxGameChangers: Number.parseInt(maxGameChangersInput.value, 10),
+    allowTutors: allowTutorsInput.checked,
   };
 }
 
 function updateMixHint() {
   const slots = commanderSlotCount();
   if (slots !== lastCommanderSlots) {
-    const delta = lastCommanderSlots - slots; // +1 land when removing partner, -1 when adding
+    const delta = lastCommanderSlots - slots;
     const lands = Number.parseInt(landInput.value, 10);
     if (Number.isFinite(lands)) {
       landInput.value = String(Math.max(0, lands + delta));
@@ -114,7 +122,8 @@ form.addEventListener("submit", async (e) => {
 
     setStatus("Fetching EDHREC recommendations…");
     const edhrec = await fetchCommanderPage(commanders.map((c) => c.name));
-    const pool = buildUngroupedPool(edhrec);
+    const gameChangers = extractGameChangerNames(edhrec);
+    const pool = buildUngroupedPool(edhrec, gameChangers);
     if (!pool.length) {
       throw new Error("EDHREC returned no card recommendations for this commander.");
     }
@@ -129,8 +138,9 @@ form.addEventListener("submit", async (e) => {
 
     const mainCount = deck.mainboard.reduce((n, c) => n + c.qty, 0);
     const lands = deck.mainboard.reduce((n, c) => n + (c.isLand ? c.qty : 0), 0);
+    const gcs = deck.mainboard.reduce((n, c) => n + (c.isGameChanger ? c.qty : 0), 0);
     setStatus(
-      `Done — ${commanders.map((c) => c.name).join(" + ")} · ${mainCount + commanders.length} cards · ${lands} lands.`
+      `Done — ${commanders.map((c) => c.name).join(" + ")} · ${mainCount + commanders.length} cards · ${lands} lands · ${gcs} game changers.`
     );
   } catch (err) {
     console.error(err);

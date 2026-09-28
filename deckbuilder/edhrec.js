@@ -104,13 +104,31 @@ export async function fetchCommanderPage(commanderNames) {
 }
 
 /**
+ * Names from EDHREC's gamechangers list for this commander page.
+ * @param {object} edhrecPayload
+ * @returns {Set<string>}
+ */
+export function extractGameChangerNames(edhrecPayload) {
+  const lists = edhrecPayload?.container?.json_dict?.cardlists || [];
+  const names = new Set();
+  for (const list of lists) {
+    if (list.tag !== "gamechangers") continue;
+    for (const cv of list.cardviews || []) {
+      if (cv?.name) names.add(cv.name);
+    }
+  }
+  return names;
+}
+
+/**
  * Merge type-tagged cardlists into an Ungrouped pool.
  * @param {object} edhrecPayload
- * @returns {{ name: string, synergy: number, inclusion_pct: number, isLand: boolean }[]}
+ * @param {Set<string>} [gameChangers]
+ * @returns {{ name: string, synergy: number, inclusion_pct: number, isLand: boolean, isGameChanger: boolean }[]}
  */
-export function buildUngroupedPool(edhrecPayload) {
+export function buildUngroupedPool(edhrecPayload, gameChangers = new Set()) {
   const lists = edhrecPayload?.container?.json_dict?.cardlists || [];
-  /** @type {Map<string, { name: string, synergy: number, inclusion_pct: number, isLand: boolean }>} */
+  /** @type {Map<string, { name: string, synergy: number, inclusion_pct: number, isLand: boolean, isGameChanger: boolean }>} */
   const byName = new Map();
 
   for (const list of lists) {
@@ -131,14 +149,15 @@ export function buildUngroupedPool(edhrecPayload) {
           synergy,
           inclusion_pct: inclusion,
           isLand,
+          isGameChanger: gameChangers.has(cv.name),
         });
         continue;
       }
 
-      // Keep best synergy / inclusion; land if seen as land in any list
       if (synergy > existing.synergy) existing.synergy = synergy;
       if (inclusion > existing.inclusion_pct) existing.inclusion_pct = inclusion;
       if (isLand) existing.isLand = true;
+      if (gameChangers.has(cv.name)) existing.isGameChanger = true;
     }
   }
 

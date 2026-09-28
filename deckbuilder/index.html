@@ -43,6 +43,20 @@
         <p id="mix-hint" class="mix-hint">54 + 6 + 39 + 1 commander = 100</p>
       </fieldset>
 
+      <fieldset class="options">
+        <legend>Filters</legend>
+        <div class="option-row filters-row">
+          <label>
+            Max game changers
+            <input type="number" id="max-game-changers" name="maxGameChangers" min="0" max="99" value="0" required>
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="allow-tutors" name="allowTutors">
+            Allow tutors
+          </label>
+        </div>
+      </fieldset>
+
       <button type="submit" id="build-btn">Build deck</button>
     </form>
 

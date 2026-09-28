@@ -3,6 +3,7 @@ import {
   fetchCollection,
   mergePipCounts,
 } from "./scryfall.js";
+import { isTutorCard } from "./filters.js";
 
 const BASIC_BY_COLOR = {
   W: "Plains",
@@ -13,11 +14,17 @@ const BASIC_BY_COLOR = {
 };
 
 /**
- * @typedef {{ synergyNonLands?: number, inclusionNonLands?: number, targetLands?: number }} BuildOptions
+ * @typedef {{
+ *   synergyNonLands?: number,
+ *   inclusionNonLands?: number,
+ *   targetLands?: number,
+ *   maxGameChangers?: number,
+ *   allowTutors?: boolean,
+ * }} BuildOptions
  */
 
 /**
- * @param {{ name: string, synergy: number, inclusion_pct: number, isLand: boolean }[]} pool
+ * @param {{ name: string, synergy: number, inclusion_pct: number, isLand: boolean, isGameChanger?: boolean }[]} pool
  * @param {object[]} commanders Scryfall cards
  * @param {string[]} colorIdentity e.g. ["G","U","W","B"]
  * @param {BuildOptions} [options]
@@ -26,6 +33,8 @@ export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
   const synergyTarget = clampInt(options.synergyNonLands, 0, 99, 54);
   const inclusionExtra = clampInt(options.inclusionNonLands, 0, 99, 6);
   const targetLands = clampInt(options.targetLands, 0, 99, 39);
+  const maxGameChangers = clampInt(options.maxGameChangers, 0, 99, 0);
+  const allowTutors = options.allowTutors === true;
   const inclusionTarget = synergyTarget + inclusionExtra;
 
   const expectedMain = synergyTarget + inclusionExtra + targetLands;
@@ -37,7 +46,7 @@ export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
     );
   }
 
-  /** @type {Map<string, { name: string, qty: number, isLand: boolean, synergy: number, inclusion_pct: number }>} */
+  /** @type {Map<string, { name: string, qty: number, isLand: boolean, synergy: number, inclusion_pct: number, isGameChanger: boolean }>} */
   const mainboard = new Map();
 
   const addCard = (entry) => {
@@ -52,6 +61,7 @@ export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
       isLand: !!entry.isLand,
       synergy: entry.synergy ?? 0,
       inclusion_pct: entry.inclusion_pct ?? 0,
+      isGameChanger: !!entry.isGameChanger,
     });
   };
 
@@ -61,7 +71,17 @@ export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
   const landCount = () =>
     [...mainboard.values()].reduce((n, c) => n + (c.isLand ? c.qty : 0), 0);
 
+  const gameChangerCount = () =>
+    [...mainboard.values()].reduce((n, c) => n + (c.isGameChanger ? c.qty : 0), 0);
+
+  const allowedByFilters = (card) => {
+    if (!allowTutors && isTutorCard(card.name)) return false;
+    if (card.isGameChanger && gameChangerCount() >= maxGameChangers) return false;
+    return true;
+  };
+
   const tryAdd = (card, nonLandCap) => {
+    if (!allowedByFilters(card)) return;
     if (card.isLand) {
       if (landCount() >= targetLands) return;
     } else if (nonLandCount() >= nonLandCap) {
@@ -104,10 +124,11 @@ export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
   // Prefer filling remaining land slots from EDHREC land pool before basics.
   if (landCount() < targetLands) {
     const landPool = [...pool]
-      .filter((c) => c.isLand && !mainboard.has(c.name))
+      .filter((c) => c.isLand && !mainboard.has(c.name) && allowedByFilters(c))
       .sort((a, b) => b.synergy - a.synergy || b.inclusion_pct - a.inclusion_pct);
     for (const card of landPool) {
       if (landCount() >= targetLands) break;
+      if (!allowedByFilters(card)) continue;
       addCard(card);
     }
   }
@@ -148,7 +169,13 @@ export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
     commanders,
     mainboard: [...mainboard.values()].sort((a, b) => a.name.localeCompare(b.name)),
     meta,
-    options: { synergyNonLands: synergyTarget, inclusionNonLands: inclusionExtra, targetLands },
+    options: {
+      synergyNonLands: synergyTarget,
+      inclusionNonLands: inclusionExtra,
+      targetLands,
+      maxGameChangers,
+      allowTutors,
+    },
   };
 }
 
@@ -197,6 +224,7 @@ function bumpBasic(mainboard, name, qty) {
       isLand: true,
       synergy: 0,
       inclusion_pct: 0,
+      isGameChanger: false,
     });
   }
 }

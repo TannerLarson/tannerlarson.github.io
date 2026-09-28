@@ -119,6 +119,29 @@ h1 {
   color: var(--danger);
 }
 
+.filters-row {
+  align-items: end;
+}
+
+.checkbox-label {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 0.55rem;
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 1rem;
+  color: var(--ink);
+  padding-bottom: 0.65rem;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: var(--accent);
+  padding: 0;
+}
+
 @media (max-width: 560px) {
   .option-row {
     grid-template-columns: 1fr;
