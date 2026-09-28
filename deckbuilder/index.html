@@ -10,8 +10,8 @@
   <main class="app">
     <h1>EDH Deckbuilder</h1>
     <p class="lede">
-      Build a 100-card Commander list from EDHREC synergy then inclusion, topped up with pip-biased basics.
-      Download a Moxfield-importable decklist.
+      Build a 100-card Commander list: synergy-ranked non-lands first, fill the rest by inclusion %,
+      then pip-biased basic lands. Download a Moxfield-importable decklist.
     </p>
 
     <form id="build-form" class="build-form">
@@ -26,21 +26,17 @@
 
       <fieldset class="options">
         <legend>Deck mix</legend>
-        <div class="option-row">
+        <div class="option-row option-row-2">
           <label>
-            Synergy non-lands
-            <input type="number" id="synergy-count" name="synergyCount" min="0" max="99" value="54" required>
-          </label>
-          <label>
-            Inclusion non-lands
-            <input type="number" id="inclusion-count" name="inclusionCount" min="0" max="99" value="6" required>
+            Synergy % of non-lands
+            <input type="number" id="synergy-percent" name="synergyPercent" min="0" max="100" value="90" required>
           </label>
           <label>
             Lands
             <input type="number" id="land-count" name="landCount" min="0" max="99" value="39" required>
           </label>
         </div>
-        <p id="mix-hint" class="mix-hint">54 + 6 + 39 + 1 commander = 100</p>
+        <p id="mix-hint" class="mix-hint">90% synergy / 10% inclusion of 60 non-lands · 39 lands · 1 commander</p>
       </fieldset>
 
       <fieldset class="options">
@@ -69,6 +65,35 @@
         <button type="button" id="download-btn">Download decklist.txt</button>
       </div>
       <pre id="deck-preview" class="deck-preview"></pre>
+    </section>
+
+    <section class="how-it-works" aria-labelledby="how-heading">
+      <h2 id="how-heading">How it works</h2>
+      <ol>
+        <li>
+          <strong>Validate the commander(s)</strong> on Scryfall (must be a legal commander, not merely commander-legal).
+        </li>
+        <li>
+          <strong>Pull EDHREC’s recommendations</strong> for that commander and merge them into one ungrouped pool
+          (creatures, spells, artifacts, and so on).
+        </li>
+        <li>
+          <strong>Synergy pass:</strong> sort that pool by synergy and add non-lands until we hit your synergy %
+          of the non-land budget (budget = 100 − commanders − lands).
+        </li>
+        <li>
+          <strong>Inclusion pass:</strong> re-sort by inclusion rate and add more non-lands (skipping duplicates)
+          until the non-land budget is full.
+        </li>
+        <li>
+          <strong>Basics:</strong> fill the remaining slots with basic lands up to your land count,
+          biased about +10 percentage points toward the colors you actually spend in the deck.
+        </li>
+        <li>
+          <strong>Filters:</strong> game changers are capped at your max; tutors are skipped unless you allow them.
+          Output is a Moxfield-importable <code>decklist.txt</code>.
+        </li>
+      </ol>
     </section>
   </main>
 

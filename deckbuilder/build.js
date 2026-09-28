@@ -15,8 +15,7 @@ const BASIC_BY_COLOR = {
 
 /**
  * @typedef {{
- *   synergyNonLands?: number,
- *   inclusionNonLands?: number,
+ *   synergyPercent?: number,
  *   targetLands?: number,
  *   maxGameChangers?: number,
  *   allowTutors?: boolean,
@@ -30,21 +29,21 @@ const BASIC_BY_COLOR = {
  * @param {BuildOptions} [options]
  */
 export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
-  const synergyTarget = clampInt(options.synergyNonLands, 0, 99, 54);
-  const inclusionExtra = clampInt(options.inclusionNonLands, 0, 99, 6);
+  const synergyPercent = clampInt(options.synergyPercent, 0, 100, 90);
   const targetLands = clampInt(options.targetLands, 0, 99, 39);
   const maxGameChangers = clampInt(options.maxGameChangers, 0, 99, 0);
   const allowTutors = options.allowTutors === true;
-  const inclusionTarget = synergyTarget + inclusionExtra;
 
-  const expectedMain = synergyTarget + inclusionExtra + targetLands;
-  const expectedTotal = expectedMain + commanders.length;
-  if (expectedTotal !== 100) {
+  const nonLandSlots = 100 - commanders.length - targetLands;
+  if (nonLandSlots < 0) {
     throw new Error(
-      `Deck mix must total 100 cards (synergy + inclusion + lands + commanders). ` +
-        `Got ${synergyTarget} + ${inclusionExtra} + ${targetLands} + ${commanders.length} = ${expectedTotal}.`
+      `Too many lands for a 100-card deck with ${commanders.length} commander(s). ` +
+        `Max lands: ${100 - commanders.length}.`
     );
   }
+
+  const synergyTarget = Math.round((nonLandSlots * synergyPercent) / 100);
+  const inclusionTarget = nonLandSlots; // fill remaining non-lands via inclusion %
 
   /** @type {Map<string, { name: string, qty: number, isLand: boolean, synergy: number, inclusion_pct: number, isGameChanger: boolean }>} */
   const mainboard = new Map();
@@ -68,9 +67,6 @@ export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
   const nonLandCount = () =>
     [...mainboard.values()].reduce((n, c) => n + (c.isLand ? 0 : c.qty), 0);
 
-  const landCount = () =>
-    [...mainboard.values()].reduce((n, c) => n + (c.isLand ? c.qty : 0), 0);
-
   const gameChangerCount = () =>
     [...mainboard.values()].reduce((n, c) => n + (c.isGameChanger ? c.qty : 0), 0);
 
@@ -80,28 +76,24 @@ export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
     return true;
   };
 
-  const tryAdd = (card, nonLandCap) => {
+  /** Non-lands only — lands come from basics afterward. */
+  const tryAddNonLand = (card, nonLandCap) => {
+    if (card.isLand) return;
     if (!allowedByFilters(card)) return;
-    if (card.isLand) {
-      if (landCount() >= targetLands) return;
-    } else if (nonLandCount() >= nonLandCap) {
-      return;
-    }
+    if (nonLandCount() >= nonLandCap) return;
     if (mainboard.has(card.name)) return;
     addCard(card);
   };
 
-  // Synergy pass — lands along the way, capped by targetLands
   const bySynergy = [...pool].sort((a, b) => b.synergy - a.synergy);
   for (const card of bySynergy) {
-    tryAdd(card, synergyTarget);
+    tryAddNonLand(card, synergyTarget);
     if (nonLandCount() >= synergyTarget) break;
   }
 
-  // Inclusion pass — more non-lands (and lands if under target)
   const byInclusion = [...pool].sort((a, b) => b.inclusion_pct - a.inclusion_pct);
   for (const card of byInclusion) {
-    tryAdd(card, inclusionTarget);
+    tryAddNonLand(card, inclusionTarget);
     if (nonLandCount() >= inclusionTarget) break;
   }
 
@@ -111,49 +103,29 @@ export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
   ];
   const meta = await fetchCollection(names);
 
-  for (const card of mainboard.values()) {
-    const scry = meta.get(card.name) || meta.get(card.name.toLowerCase());
+  // Scryfall may reclassify something as a land — drop those from non-land picks.
+  for (const [name, card] of [...mainboard.entries()]) {
+    const scry = meta.get(name) || meta.get(name.toLowerCase());
     if (scry?.type_line && /\bLand\b/i.test(scry.type_line)) {
-      card.isLand = true;
+      mainboard.delete(name);
     }
   }
 
-  // If Scryfall reclassified cards as lands, we may be over the land cap — trim weakest lands.
-  trimLandsToTarget(mainboard, targetLands);
-
-  // Prefer filling remaining land slots from EDHREC land pool before basics.
-  if (landCount() < targetLands) {
-    const landPool = [...pool]
-      .filter((c) => c.isLand && !mainboard.has(c.name) && allowedByFilters(c))
-      .sort((a, b) => b.synergy - a.synergy || b.inclusion_pct - a.inclusion_pct);
-    for (const card of landPool) {
-      if (landCount() >= targetLands) break;
-      if (!allowedByFilters(card)) continue;
-      addCard(card);
+  // Fill any non-land shortfall left by filters / reclassification via more inclusion picks.
+  if (nonLandCount() < inclusionTarget) {
+    for (const card of byInclusion) {
+      tryAddNonLand(card, inclusionTarget);
+      if (nonLandCount() >= inclusionTarget) break;
     }
   }
 
-  // Refresh meta for any newly added lands
-  const missingMeta = [...mainboard.keys()].filter(
-    (n) => !meta.has(n) && !meta.has(n.toLowerCase())
-  );
-  if (missingMeta.length) {
-    const extra = await fetchCollection(missingMeta);
-    for (const [k, v] of extra) meta.set(k, v);
-  }
-
-  let basicsNeeded = targetLands - landCount();
-  if (basicsNeeded < 0) {
-    trimLandsToTarget(mainboard, targetLands);
-    basicsNeeded = 0;
-  }
-
-  // If non-land passes came up short, leftover slots become extra basics so we still hit 100.
   const mainboardCount = [...mainboard.values()].reduce((n, c) => n + c.qty, 0);
-  const slotsLeft = 100 - commanders.length - mainboardCount;
-  if (slotsLeft > basicsNeeded) {
-    basicsNeeded = slotsLeft;
+  let basicsNeeded = 100 - commanders.length - mainboardCount;
+  // Prefer hitting the land target; leftover non-land shortfalls also become basics.
+  if (basicsNeeded < targetLands) {
+    // Shouldn't happen if math is right; still clamp upward to land target when possible
   }
+  basicsNeeded = Math.max(basicsNeeded, 0);
 
   const colors = (colorIdentity || []).filter((c) => BASIC_BY_COLOR[c]);
 
@@ -170,9 +142,10 @@ export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
     mainboard: [...mainboard.values()].sort((a, b) => a.name.localeCompare(b.name)),
     meta,
     options: {
-      synergyNonLands: synergyTarget,
-      inclusionNonLands: inclusionExtra,
+      synergyPercent,
       targetLands,
+      synergyNonLands: synergyTarget,
+      inclusionNonLands: Math.max(0, inclusionTarget - synergyTarget),
       maxGameChangers,
       allowTutors,
     },
@@ -183,33 +156,6 @@ function clampInt(value, min, max, fallback) {
   const n = Number.parseInt(value, 10);
   if (!Number.isFinite(n)) return fallback;
   return Math.min(max, Math.max(min, n));
-}
-
-function trimLandsToTarget(mainboard, targetLands) {
-  let lands = landQty(mainboard);
-  if (lands <= targetLands) return;
-
-  const landEntries = [...mainboard.values()]
-    .filter((c) => c.isLand)
-    .sort(
-      (a, b) =>
-        a.synergy - b.synergy ||
-        a.inclusion_pct - b.inclusion_pct ||
-        a.name.localeCompare(b.name)
-    );
-
-  for (const card of landEntries) {
-    while (card.qty > 0 && lands > targetLands) {
-      card.qty -= 1;
-      lands -= 1;
-    }
-    if (card.qty <= 0) mainboard.delete(card.name);
-    if (lands <= targetLands) break;
-  }
-}
-
-function landQty(mainboard) {
-  return [...mainboard.values()].reduce((n, c) => n + (c.isLand ? c.qty : 0), 0);
 }
 
 function bumpBasic(mainboard, name, qty) {
@@ -250,20 +196,7 @@ function allocateBasics(mainboard, meta, commanders, colors, basicsNeeded) {
   }
 
   const sourceCounts = Object.fromEntries(colors.map((c) => [c, 0]));
-  let existingLands = 0;
-  for (const card of mainboard.values()) {
-    if (!card.isLand) continue;
-    existingLands += card.qty;
-    const scry = meta.get(card.name) || meta.get(card.name.toLowerCase());
-    const produced = scry?.produced_mana || [];
-    for (let i = 0; i < card.qty; i++) {
-      for (const c of colors) {
-        if (produced.includes(c)) sourceCounts[c] += 1;
-      }
-    }
-  }
-
-  const totalLandsTarget = existingLands + basicsNeeded;
+  const totalLandsTarget = basicsNeeded;
   const basicQty = Object.fromEntries(colors.map((c) => [c, 0]));
 
   for (let i = 0; i < basicsNeeded; i++) {

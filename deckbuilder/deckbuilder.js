@@ -15,8 +15,7 @@ const previewEl = document.getElementById("deck-preview");
 const buildBtn = document.getElementById("build-btn");
 const downloadBtn = document.getElementById("download-btn");
 const mixHint = document.getElementById("mix-hint");
-const synergyInput = document.getElementById("synergy-count");
-const inclusionInput = document.getElementById("inclusion-count");
+const synergyPercentInput = document.getElementById("synergy-percent");
 const landInput = document.getElementById("land-count");
 const maxGameChangersInput = document.getElementById("max-game-changers");
 const allowTutorsInput = document.getElementById("allow-tutors");
@@ -55,8 +54,7 @@ let lastCommanderSlots = commanderSlotCount();
 
 function readMix() {
   return {
-    synergyNonLands: Number.parseInt(synergyInput.value, 10),
-    inclusionNonLands: Number.parseInt(inclusionInput.value, 10),
+    synergyPercent: Number.parseInt(synergyPercentInput.value, 10),
     targetLands: Number.parseInt(landInput.value, 10),
     maxGameChangers: Number.parseInt(maxGameChangersInput.value, 10),
     allowTutors: allowTutorsInput.checked,
@@ -74,15 +72,34 @@ function updateMixHint() {
     lastCommanderSlots = slots;
   }
 
-  const { synergyNonLands: s, inclusionNonLands: i, targetLands: l } = readMix();
+  const pct = Number.parseInt(synergyPercentInput.value, 10);
+  const lands = Number.parseInt(landInput.value, 10);
   const cmd = slots;
-  const total = (Number.isFinite(s) ? s : 0) + (Number.isFinite(i) ? i : 0) + (Number.isFinite(l) ? l : 0) + cmd;
+  const nonLands = 100 - cmd - (Number.isFinite(lands) ? lands : 0);
+  const valid =
+    Number.isFinite(pct) &&
+    pct >= 0 &&
+    pct <= 100 &&
+    Number.isFinite(lands) &&
+    lands >= 0 &&
+    nonLands >= 0;
+
+  if (!valid) {
+    mixHint.textContent = "Synergy % must be 0–100; lands + commanders must leave room for non-lands.";
+    mixHint.classList.add("invalid");
+    return;
+  }
+
+  const synergyCards = Math.round((nonLands * pct) / 100);
+  const inclusionCards = nonLands - synergyCards;
+  const inclusionPct = 100 - pct;
   const cmdLabel = cmd === 1 ? "1 commander" : "2 commanders";
-  mixHint.textContent = `${s} + ${i} + ${l} + ${cmdLabel} = ${total}`;
-  mixHint.classList.toggle("invalid", total !== 100);
+  mixHint.textContent =
+    `${pct}% synergy / ${inclusionPct}% inclusion → ${synergyCards} + ${inclusionCards} non-lands · ${lands} lands · ${cmdLabel}`;
+  mixHint.classList.remove("invalid");
 }
 
-for (const el of [synergyInput, inclusionInput, landInput, commander1, commander2]) {
+for (const el of [synergyPercentInput, landInput, commander1, commander2]) {
   el.addEventListener("input", updateMixHint);
 }
 updateMixHint();
@@ -100,11 +117,13 @@ form.addEventListener("submit", async (e) => {
 
   try {
     const cmdSlots = name2 ? 2 : 1;
-    const mixTotal =
-      mix.synergyNonLands + mix.inclusionNonLands + mix.targetLands + cmdSlots;
-    if (mixTotal !== 100) {
+    const nonLands = 100 - cmdSlots - mix.targetLands;
+    if (!Number.isFinite(mix.synergyPercent) || mix.synergyPercent < 0 || mix.synergyPercent > 100) {
+      throw new Error("Synergy % must be between 0 and 100.");
+    }
+    if (!Number.isFinite(mix.targetLands) || mix.targetLands < 0 || nonLands < 0) {
       throw new Error(
-        `Synergy + inclusion + lands + commanders must equal 100 (currently ${mixTotal}).`
+        `Lands + commanders must leave room for non-lands (max lands: ${100 - cmdSlots}).`
       );
     }
 
@@ -128,7 +147,7 @@ form.addEventListener("submit", async (e) => {
       throw new Error("EDHREC returned no card recommendations for this commander.");
     }
 
-    setStatus("Building deck (synergy → inclusion → lands)…");
+    setStatus("Building deck (synergy → inclusion → basics)…");
     const identity = colorIdentityUnion(commanders);
     const deck = await buildDeck(pool, commanders, identity, mix);
     lastDeckText = formatMoxfield(deck.commanders, deck.mainboard);
@@ -139,8 +158,10 @@ form.addEventListener("submit", async (e) => {
     const mainCount = deck.mainboard.reduce((n, c) => n + c.qty, 0);
     const lands = deck.mainboard.reduce((n, c) => n + (c.isLand ? c.qty : 0), 0);
     const gcs = deck.mainboard.reduce((n, c) => n + (c.isGameChanger ? c.qty : 0), 0);
+    const syn = deck.options.synergyNonLands;
+    const inc = deck.options.inclusionNonLands;
     setStatus(
-      `Done — ${commanders.map((c) => c.name).join(" + ")} · ${mainCount + commanders.length} cards · ${lands} lands · ${gcs} game changers.`
+      `Done — ${commanders.map((c) => c.name).join(" + ")} · ${syn} synergy + ${inc} inclusion · ${lands} lands · ${gcs} game changers · ${mainCount + commanders.length} total.`
     );
   } catch (err) {
     console.error(err);
