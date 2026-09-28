@@ -3,3 +3,8 @@
 
 hanabi/target/
 hanabi/Cargo.lock
+
+# Cloudflare Worker
+workers/edhrec-proxy/node_modules/
+workers/edhrec-proxy/.wrangler/
+.devtools/

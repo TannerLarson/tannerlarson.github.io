@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EDH Deckbuilder</title>
+  <link rel="stylesheet" href="deckbuilder.css">
+</head>
+<body>
+  <main class="app">
+    <h1>EDH Deckbuilder</h1>
+    <p class="lede">
+      Build a 100-card Commander list from EDHREC synergy then inclusion, topped up with pip-biased basics.
+      Download a Moxfield-importable decklist.
+    </p>
+
+    <form id="build-form" class="build-form">
+      <label>
+        Commander
+        <input type="text" id="commander-1" name="commander1" required placeholder="Krenko, Mob Boss" autocomplete="off">
+      </label>
+      <label>
+        Partner / Background (optional)
+        <input type="text" id="commander-2" name="commander2" placeholder="Leave blank if solo" autocomplete="off">
+      </label>
+      <button type="submit" id="build-btn">Build deck</button>
+    </form>
+
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+    <pre id="error" class="error" hidden></pre>
+
+    <section id="results" class="results" hidden>
+      <div class="results-header">
+        <h2>Deck</h2>
+        <button type="button" id="download-btn">Download decklist.txt</button>
+      </div>
+      <pre id="deck-preview" class="deck-preview"></pre>
+    </section>
+  </main>
+
+  <script type="module" src="deckbuilder.js"></script>
+</body>
+</html>
