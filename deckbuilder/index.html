@@ -10,8 +10,8 @@
   <main class="app">
     <h1>EDH Deckbuilder</h1>
     <p class="lede">
-      Build a 100-card Commander list: synergy-ranked non-lands first, fill the rest by inclusion %,
-      then pip-biased basic lands. Download a Moxfield-importable decklist.
+      Build a 100-card Commander list from EDHREC: walk synergy then inclusion (lands included along the way),
+      then top up the remaining slots with pip-biased basics. Download a Moxfield-importable decklist.
     </p>
 
     <form id="build-form" class="build-form">
@@ -78,16 +78,18 @@
           (creatures, spells, artifacts, and so on).
         </li>
         <li>
-          <strong>Synergy pass:</strong> sort that pool by synergy and add non-lands until we hit your synergy %
-          of the non-land budget (budget = 100 − commanders − lands).
+          <strong>Synergy pass:</strong> sort the pool by synergy and walk top → bottom, adding
+          <em>every</em> card (lands included). Stop when non-lands reach your synergy % of the
+          non-land budget (budget = 100 − commanders − lands).
         </li>
         <li>
-          <strong>Inclusion pass:</strong> re-sort by inclusion rate and add more non-lands (skipping duplicates)
-          until the non-land budget is full.
+          <strong>Inclusion pass:</strong> re-sort by inclusion rate and walk again, adding every
+          new card (lands included) until the non-land budget is full.
         </li>
         <li>
-          <strong>Basics:</strong> fill the remaining slots with basic lands up to your land count,
+          <strong>Basics:</strong> whatever slots remain to hit 100 become basic lands,
           biased about +10 percentage points toward the colors you actually spend in the deck.
+          (EDHREC lands from the earlier passes already count toward the total.)
         </li>
         <li>
           <strong>Filters:</strong> game changers are capped at your max; tutors are skipped unless you allow them.

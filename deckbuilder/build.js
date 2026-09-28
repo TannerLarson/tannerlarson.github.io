@@ -34,6 +34,8 @@ export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
   const maxGameChangers = clampInt(options.maxGameChangers, 0, 99, 0);
   const allowTutors = options.allowTutors === true;
 
+  // Lands input sizes the non-land budget. EDHREC lands picked along the way are extras;
+  // basics then fill whatever slots remain to reach 100.
   const nonLandSlots = 100 - commanders.length - targetLands;
   if (nonLandSlots < 0) {
     throw new Error(
@@ -43,7 +45,7 @@ export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
   }
 
   const synergyTarget = Math.round((nonLandSlots * synergyPercent) / 100);
-  const inclusionTarget = nonLandSlots; // fill remaining non-lands via inclusion %
+  const inclusionTarget = nonLandSlots;
 
   /** @type {Map<string, { name: string, qty: number, isLand: boolean, synergy: number, inclusion_pct: number, isGameChanger: boolean }>} */
   const mainboard = new Map();
@@ -76,24 +78,29 @@ export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
     return true;
   };
 
-  /** Non-lands only — lands come from basics afterward. */
-  const tryAddNonLand = (card, nonLandCap) => {
-    if (card.isLand) return;
+  /**
+   * Add every card (lands included). Stop condition is non-land count only.
+   * @param {typeof pool[0]} card
+   * @param {number} nonLandCap
+   */
+  const tryAdd = (card, nonLandCap) => {
     if (!allowedByFilters(card)) return;
-    if (nonLandCount() >= nonLandCap) return;
     if (mainboard.has(card.name)) return;
+    // Once non-land cap is hit we stop the pass entirely (caller breaks).
+    // Lands encountered before that cap are always added.
+    if (!card.isLand && nonLandCount() >= nonLandCap) return;
     addCard(card);
   };
 
   const bySynergy = [...pool].sort((a, b) => b.synergy - a.synergy);
   for (const card of bySynergy) {
-    tryAddNonLand(card, synergyTarget);
+    tryAdd(card, synergyTarget);
     if (nonLandCount() >= synergyTarget) break;
   }
 
   const byInclusion = [...pool].sort((a, b) => b.inclusion_pct - a.inclusion_pct);
   for (const card of byInclusion) {
-    tryAddNonLand(card, inclusionTarget);
+    tryAdd(card, inclusionTarget);
     if (nonLandCount() >= inclusionTarget) break;
   }
 
@@ -103,29 +110,38 @@ export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
   ];
   const meta = await fetchCollection(names);
 
-  // Scryfall may reclassify something as a land — drop those from non-land picks.
-  for (const [name, card] of [...mainboard.entries()]) {
-    const scry = meta.get(name) || meta.get(name.toLowerCase());
+  // Refine land flags from Scryfall; don't drop cards — they already earned a slot.
+  for (const card of mainboard.values()) {
+    const scry = meta.get(card.name) || meta.get(card.name.toLowerCase());
     if (scry?.type_line && /\bLand\b/i.test(scry.type_line)) {
-      mainboard.delete(name);
+      card.isLand = true;
     }
   }
 
-  // Fill any non-land shortfall left by filters / reclassification via more inclusion picks.
+  // If reclassification put us under the non-land target, keep walking inclusion.
   if (nonLandCount() < inclusionTarget) {
     for (const card of byInclusion) {
-      tryAddNonLand(card, inclusionTarget);
+      tryAdd(card, inclusionTarget);
       if (nonLandCount() >= inclusionTarget) break;
+    }
+    const missingMeta = [...mainboard.keys()].filter(
+      (n) => !meta.has(n) && !meta.has(n.toLowerCase())
+    );
+    if (missingMeta.length) {
+      const extra = await fetchCollection(missingMeta);
+      for (const [k, v] of extra) meta.set(k, v);
+      for (const name of missingMeta) {
+        const card = mainboard.get(name);
+        const scry = meta.get(name) || meta.get(name.toLowerCase());
+        if (card && scry?.type_line && /\bLand\b/i.test(scry.type_line)) {
+          card.isLand = true;
+        }
+      }
     }
   }
 
   const mainboardCount = [...mainboard.values()].reduce((n, c) => n + c.qty, 0);
-  let basicsNeeded = 100 - commanders.length - mainboardCount;
-  // Prefer hitting the land target; leftover non-land shortfalls also become basics.
-  if (basicsNeeded < targetLands) {
-    // Shouldn't happen if math is right; still clamp upward to land target when possible
-  }
-  basicsNeeded = Math.max(basicsNeeded, 0);
+  const basicsNeeded = Math.max(0, 100 - commanders.length - mainboardCount);
 
   const colors = (colorIdentity || []).filter((c) => BASIC_BY_COLOR[c]);
 
@@ -196,7 +212,20 @@ function allocateBasics(mainboard, meta, commanders, colors, basicsNeeded) {
   }
 
   const sourceCounts = Object.fromEntries(colors.map((c) => [c, 0]));
-  const totalLandsTarget = basicsNeeded;
+  let existingLands = 0;
+  for (const card of mainboard.values()) {
+    if (!card.isLand) continue;
+    existingLands += card.qty;
+    const scry = meta.get(card.name) || meta.get(card.name.toLowerCase());
+    const produced = scry?.produced_mana || [];
+    for (let i = 0; i < card.qty; i++) {
+      for (const c of colors) {
+        if (produced.includes(c)) sourceCounts[c] += 1;
+      }
+    }
+  }
+
+  const totalLandsTarget = existingLands + basicsNeeded;
   const basicQty = Object.fromEntries(colors.map((c) => [c, 0]));
 
   for (let i = 0; i < basicsNeeded; i++) {
