@@ -10,6 +10,12 @@ const resultsEl = document.getElementById("results");
 const previewEl = document.getElementById("deck-preview");
 const buildBtn = document.getElementById("build-btn");
 const downloadBtn = document.getElementById("download-btn");
+const mixHint = document.getElementById("mix-hint");
+const synergyInput = document.getElementById("synergy-count");
+const inclusionInput = document.getElementById("inclusion-count");
+const landInput = document.getElementById("land-count");
+const commander1 = document.getElementById("commander-1");
+const commander2 = document.getElementById("commander-2");
 
 let lastDeckText = "";
 
@@ -35,6 +41,44 @@ function colorIdentityUnion(commanders) {
   return [...set];
 }
 
+function commanderSlotCount() {
+  return commander2.value.trim() ? 2 : 1;
+}
+
+let lastCommanderSlots = commanderSlotCount();
+
+function readMix() {
+  return {
+    synergyNonLands: Number.parseInt(synergyInput.value, 10),
+    inclusionNonLands: Number.parseInt(inclusionInput.value, 10),
+    targetLands: Number.parseInt(landInput.value, 10),
+  };
+}
+
+function updateMixHint() {
+  const slots = commanderSlotCount();
+  if (slots !== lastCommanderSlots) {
+    const delta = lastCommanderSlots - slots; // +1 land when removing partner, -1 when adding
+    const lands = Number.parseInt(landInput.value, 10);
+    if (Number.isFinite(lands)) {
+      landInput.value = String(Math.max(0, lands + delta));
+    }
+    lastCommanderSlots = slots;
+  }
+
+  const { synergyNonLands: s, inclusionNonLands: i, targetLands: l } = readMix();
+  const cmd = slots;
+  const total = (Number.isFinite(s) ? s : 0) + (Number.isFinite(i) ? i : 0) + (Number.isFinite(l) ? l : 0) + cmd;
+  const cmdLabel = cmd === 1 ? "1 commander" : "2 commanders";
+  mixHint.textContent = `${s} + ${i} + ${l} + ${cmdLabel} = ${total}`;
+  mixHint.classList.toggle("invalid", total !== 100);
+}
+
+for (const el of [synergyInput, inclusionInput, landInput, commander1, commander2]) {
+  el.addEventListener("input", updateMixHint);
+}
+updateMixHint();
+
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
   setError("");
@@ -42,10 +86,20 @@ form.addEventListener("submit", async (e) => {
   lastDeckText = "";
   buildBtn.disabled = true;
 
-  const name1 = document.getElementById("commander-1").value.trim();
-  const name2 = document.getElementById("commander-2").value.trim();
+  const name1 = commander1.value.trim();
+  const name2 = commander2.value.trim();
+  const mix = readMix();
 
   try {
+    const cmdSlots = name2 ? 2 : 1;
+    const mixTotal =
+      mix.synergyNonLands + mix.inclusionNonLands + mix.targetLands + cmdSlots;
+    if (mixTotal !== 100) {
+      throw new Error(
+        `Synergy + inclusion + lands + commanders must equal 100 (currently ${mixTotal}).`
+      );
+    }
+
     setStatus("Looking up commander(s) on Scryfall…");
     const commanders = [];
     for (const name of [name1, name2].filter(Boolean)) {
@@ -65,17 +119,18 @@ form.addEventListener("submit", async (e) => {
       throw new Error("EDHREC returned no card recommendations for this commander.");
     }
 
-    setStatus("Building deck (synergy → inclusion → basics)…");
+    setStatus("Building deck (synergy → inclusion → lands)…");
     const identity = colorIdentityUnion(commanders);
-    const deck = await buildDeck(pool, commanders, identity);
+    const deck = await buildDeck(pool, commanders, identity, mix);
     lastDeckText = formatMoxfield(deck.commanders, deck.mainboard);
 
     previewEl.textContent = lastDeckText;
     resultsEl.hidden = false;
 
     const mainCount = deck.mainboard.reduce((n, c) => n + c.qty, 0);
+    const lands = deck.mainboard.reduce((n, c) => n + (c.isLand ? c.qty : 0), 0);
     setStatus(
-      `Done — ${commanders.map((c) => c.name).join(" + ")} · ${mainCount + commanders.length} cards.`
+      `Done — ${commanders.map((c) => c.name).join(" + ")} · ${mainCount + commanders.length} cards · ${lands} lands.`
     );
   } catch (err) {
     console.error(err);

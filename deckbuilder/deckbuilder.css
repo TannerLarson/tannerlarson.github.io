@@ -82,6 +82,49 @@ h1 {
   outline-offset: 1px;
 }
 
+.options {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.options legend {
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.75rem;
+  padding: 0;
+}
+
+.option-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.option-row input[type="number"] {
+  width: 100%;
+}
+
+.mix-hint {
+  margin: 0.65rem 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.mix-hint.invalid {
+  color: var(--danger);
+}
+
+@media (max-width: 560px) {
+  .option-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 button {
   font: inherit;
   cursor: pointer;

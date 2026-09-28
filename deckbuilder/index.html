@@ -23,6 +23,26 @@
         Partner / Background (optional)
         <input type="text" id="commander-2" name="commander2" placeholder="Leave blank if solo" autocomplete="off">
       </label>
+
+      <fieldset class="options">
+        <legend>Deck mix</legend>
+        <div class="option-row">
+          <label>
+            Synergy non-lands
+            <input type="number" id="synergy-count" name="synergyCount" min="0" max="99" value="54" required>
+          </label>
+          <label>
+            Inclusion non-lands
+            <input type="number" id="inclusion-count" name="inclusionCount" min="0" max="99" value="6" required>
+          </label>
+          <label>
+            Lands
+            <input type="number" id="land-count" name="landCount" min="0" max="99" value="39" required>
+          </label>
+        </div>
+        <p id="mix-hint" class="mix-hint">54 + 6 + 39 + 1 commander = 100</p>
+      </fieldset>
+
       <button type="submit" id="build-btn">Build deck</button>
     </form>
 
