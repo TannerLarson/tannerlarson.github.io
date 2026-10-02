@@ -16,7 +16,7 @@ const BASIC_BY_COLOR = {
 
 /**
  * @typedef {{
- *   synergyPercent?: number,
+ *   liftPercent?: number,
  *   targetLands?: number,
  *   maxGameChangers?: number,
  *   allowTutors?: boolean,
@@ -24,13 +24,13 @@ const BASIC_BY_COLOR = {
  */
 
 /**
- * @param {{ name: string, synergy: number, inclusion_pct: number, isLand: boolean, isGameChanger?: boolean }[]} pool
+ * @param {{ name: string, lift: number, inclusion_pct: number, isLand: boolean, isGameChanger?: boolean }[]} pool
  * @param {object[]} commanders Scryfall cards
  * @param {string[]} colorIdentity e.g. ["G","U","W","B"]
  * @param {BuildOptions} [options]
  */
 export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
-  const synergyPercent = clampInt(options.synergyPercent, 0, 100, 90);
+  const liftPercent = clampInt(options.liftPercent, 0, 100, 90);
   const targetLands = clampInt(options.targetLands, 0, 99, 39);
   const maxGameChangers = clampInt(options.maxGameChangers, 0, 99, 0);
   const allowTutors = options.allowTutors === true;
@@ -45,10 +45,10 @@ export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
     );
   }
 
-  const synergyTarget = Math.round((nonLandSlots * synergyPercent) / 100);
+  const liftTarget = Math.round((nonLandSlots * liftPercent) / 100);
   const inclusionTarget = nonLandSlots;
 
-  /** @type {Map<string, { name: string, qty: number, isLand: boolean, synergy: number, inclusion_pct: number, isGameChanger: boolean }>} */
+  /** @type {Map<string, { name: string, qty: number, isLand: boolean, lift: number, inclusion_pct: number, isGameChanger: boolean }>} */
   const mainboard = new Map();
 
   const addCard = (entry) => {
@@ -61,7 +61,7 @@ export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
       name: entry.name,
       qty: 1,
       isLand: !!entry.isLand,
-      synergy: entry.synergy ?? 0,
+      lift: entry.lift ?? 0,
       inclusion_pct: entry.inclusion_pct ?? 0,
       isGameChanger: !!entry.isGameChanger,
     });
@@ -93,10 +93,10 @@ export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
     addCard(card);
   };
 
-  const bySynergy = [...pool].sort((a, b) => b.synergy - a.synergy);
-  for (const card of bySynergy) {
-    tryAdd(card, synergyTarget);
-    if (nonLandCount() >= synergyTarget) break;
+  const byLift = [...pool].sort((a, b) => b.lift - a.lift);
+  for (const card of byLift) {
+    tryAdd(card, liftTarget);
+    if (nonLandCount() >= liftTarget) break;
   }
 
   const byInclusion = [...pool].sort((a, b) => b.inclusion_pct - a.inclusion_pct);
@@ -159,10 +159,10 @@ export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
     mainboard: [...mainboard.values()].sort((a, b) => a.name.localeCompare(b.name)),
     meta,
     options: {
-      synergyPercent,
+      liftPercent,
       targetLands,
-      synergyNonLands: synergyTarget,
-      inclusionNonLands: Math.max(0, inclusionTarget - synergyTarget),
+      liftNonLands: liftTarget,
+      inclusionNonLands: Math.max(0, inclusionTarget - liftTarget),
       maxGameChangers,
       allowTutors,
     },
@@ -185,7 +185,7 @@ function bumpBasic(mainboard, name, qty) {
       name,
       qty,
       isLand: true,
-      synergy: 0,
+      lift: 0,
       inclusion_pct: 0,
       isGameChanger: false,
     });

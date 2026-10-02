@@ -10,7 +10,7 @@
   <main class="app">
     <h1>EDH Deckbuilder</h1>
     <p class="lede">
-      Build a 100-card Commander list from EDHREC: walk synergy then inclusion (lands included along the way),
+      Build a 100-card Commander list from EDHREC: walk lift then inclusion (lands included along the way),
       then top up the remaining slots with pip-biased basics. Copy a Moxfield-importable decklist.
     </p>
 
@@ -28,15 +28,15 @@
         <legend>Deck mix</legend>
         <div class="option-row option-row-2">
           <label>
-            Synergy % of non-lands
-            <input type="number" id="synergy-percent" name="synergyPercent" min="0" max="100" value="90" required>
+            Lift % of non-lands
+            <input type="number" id="lift-percent" name="liftPercent" min="0" max="100" value="90" required>
           </label>
           <label>
             Lands
             <input type="number" id="land-count" name="landCount" min="0" max="99" value="39" required>
           </label>
         </div>
-        <p id="mix-hint" class="mix-hint">90% synergy / 10% inclusion of 60 non-lands · 39 lands · 1 commander</p>
+        <p id="mix-hint" class="mix-hint">90% lift / 10% inclusion of 60 non-lands · 39 lands · 1 commander</p>
       </fieldset>
 
       <fieldset class="options">
@@ -78,8 +78,10 @@
           (creatures, spells, artifacts, and so on).
         </li>
         <li>
-          <strong>Synergy pass:</strong> sort the pool by synergy and walk top → bottom, adding
-          <em>every</em> card (lands included). Stop when non-lands reach your synergy % of the
+          <strong>Lift pass:</strong> sort the pool by EDHREC
+          <a href="https://edhrec.com/articles/changelog-replacing-synergy-with-lift-on-edhrecs-card-pages">Lift</a>
+          and walk top → bottom, adding
+          <em>every</em> card (lands included). Stop when non-lands reach your lift % of the
           non-land budget (budget = 100 − commanders − lands).
         </li>
         <li>

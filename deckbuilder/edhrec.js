@@ -124,13 +124,14 @@ export function extractGameChangerNames(edhrecPayload) {
 
 /**
  * Merge type-tagged cardlists into an Ungrouped pool.
+ * Prefers EDHREC's Lift metric (falls back to legacy Synergy if Lift is absent).
  * @param {object} edhrecPayload
  * @param {Set<string>} [gameChangers]
- * @returns {{ name: string, synergy: number, inclusion_pct: number, isLand: boolean, isGameChanger: boolean }[]}
+ * @returns {{ name: string, lift: number, inclusion_pct: number, isLand: boolean, isGameChanger: boolean }[]}
  */
 export function buildUngroupedPool(edhrecPayload, gameChangers = new Set()) {
   const lists = edhrecPayload?.container?.json_dict?.cardlists || [];
-  /** @type {Map<string, { name: string, synergy: number, inclusion_pct: number, isLand: boolean, isGameChanger: boolean }>} */
+  /** @type {Map<string, { name: string, lift: number, inclusion_pct: number, isLand: boolean, isGameChanger: boolean }>} */
   const byName = new Map();
 
   for (const list of lists) {
@@ -142,13 +143,19 @@ export function buildUngroupedPool(edhrecPayload, gameChangers = new Set()) {
       if (!cv?.name) continue;
       const potential = cv.potential_decks || 0;
       const inclusion = potential > 0 ? cv.num_decks / potential : 0;
-      const synergy = typeof cv.synergy === "number" ? cv.synergy : 0;
+      // Lift replaced Synergy on EDHREC commander pages (centered at 1, not 0).
+      const lift =
+        typeof cv.lift === "number"
+          ? cv.lift
+          : typeof cv.synergy === "number"
+            ? cv.synergy
+            : 0;
       const existing = byName.get(cv.name);
 
       if (!existing) {
         byName.set(cv.name, {
           name: cv.name,
-          synergy,
+          lift,
           inclusion_pct: inclusion,
           isLand,
           isGameChanger: gameChangers.has(cv.name),
@@ -156,7 +163,7 @@ export function buildUngroupedPool(edhrecPayload, gameChangers = new Set()) {
         continue;
       }
 
-      if (synergy > existing.synergy) existing.synergy = synergy;
+      if (lift > existing.lift) existing.lift = lift;
       if (inclusion > existing.inclusion_pct) existing.inclusion_pct = inclusion;
       if (isLand) existing.isLand = true;
       if (gameChangers.has(cv.name)) existing.isGameChanger = true;
