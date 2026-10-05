@@ -30,7 +30,7 @@ const BASIC_BY_COLOR = {
  * @param {BuildOptions} [options]
  */
 export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
-  const liftPercent = clampInt(options.liftPercent, 0, 100, 90);
+  const liftPercent = clampInt(options.liftPercent, 0, 100, 0);
   const targetLands = clampInt(options.targetLands, 0, 99, 39);
   const maxGameChangers = clampInt(options.maxGameChangers, 0, 99, 0);
   const allowTutors = options.allowTutors === true;
@@ -192,12 +192,18 @@ function bumpBasic(mainboard, name, qty) {
   }
 }
 
+/**
+ * Split basics across identity colors in proportion to colored mana symbols
+ * in the commanders + mainboard (largest-remainder rounding).
+ * Ignores existing land production — duals/fetches do not skew the split.
+ */
 function allocateBasics(mainboard, meta, commanders, colors, basicsNeeded) {
   let pips = { W: 0, U: 0, B: 0, R: 0, G: 0 };
   for (const cmd of commanders) {
     pips = mergePipCounts(pips, countPips(cardManaCost(cmd)));
   }
   for (const card of mainboard.values()) {
+    if (card.isLand) continue; // lands usually have no pips; skip anyway
     const scry = meta.get(card.name) || meta.get(card.name.toLowerCase());
     if (!scry) continue;
     const costPips = countPips(cardManaCost(scry));
@@ -206,43 +212,33 @@ function allocateBasics(mainboard, meta, commanders, colors, basicsNeeded) {
     }
   }
 
-  const pipTotal = colors.reduce((n, c) => n + (pips[c] || 0), 0) || colors.length;
-  const pipShare = {};
-  for (const c of colors) {
-    pipShare[c] = (pips[c] || 0) / pipTotal;
+  // Only identity colors count toward the ratio.
+  const weights = Object.fromEntries(
+    colors.map((c) => [c, pips[c] || 0])
+  );
+  let weightTotal = colors.reduce((n, c) => n + weights[c], 0);
+  if (weightTotal <= 0) {
+    // No colored pips found — split evenly across identity.
+    for (const c of colors) weights[c] = 1;
+    weightTotal = colors.length;
   }
 
-  const sourceCounts = Object.fromEntries(colors.map((c) => [c, 0]));
-  let existingLands = 0;
-  for (const card of mainboard.values()) {
-    if (!card.isLand) continue;
-    existingLands += card.qty;
-    const scry = meta.get(card.name) || meta.get(card.name.toLowerCase());
-    const produced = scry?.produced_mana || [];
-    for (let i = 0; i < card.qty; i++) {
-      for (const c of colors) {
-        if (produced.includes(c)) sourceCounts[c] += 1;
-      }
-    }
-  }
-
-  const totalLandsTarget = existingLands + basicsNeeded;
   const basicQty = Object.fromEntries(colors.map((c) => [c, 0]));
+  const remainders = [];
+  let assigned = 0;
+  for (const c of colors) {
+    const exact = (basicsNeeded * weights[c]) / weightTotal;
+    const whole = Math.floor(exact);
+    basicQty[c] = whole;
+    assigned += whole;
+    remainders.push({ c, frac: exact - whole });
+  }
 
-  for (let i = 0; i < basicsNeeded; i++) {
-    let bestColor = colors[0];
-    let bestScore = -Infinity;
-    for (const c of colors) {
-      const target = (pipShare[c] + 0.1) * totalLandsTarget;
-      const current = sourceCounts[c] + basicQty[c];
-      const shortfall = target - current;
-      const score = shortfall + pipShare[c] * 0.01;
-      if (score > bestScore) {
-        bestScore = score;
-        bestColor = c;
-      }
-    }
-    basicQty[bestColor] += 1;
+  // Largest remainder: hand out leftover basics to colors that were rounded down most.
+  remainders.sort((a, b) => b.frac - a.frac || a.c.localeCompare(b.c));
+  let left = basicsNeeded - assigned;
+  for (let i = 0; left > 0; i++, left--) {
+    basicQty[remainders[i % remainders.length].c] += 1;
   }
 
   for (const c of colors) {

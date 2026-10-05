@@ -29,14 +29,14 @@
         <div class="option-row option-row-2">
           <label>
             Lift % of non-lands
-            <input type="number" id="lift-percent" name="liftPercent" min="0" max="100" value="90" required>
+            <input type="number" id="lift-percent" name="liftPercent" min="0" max="100" value="0" required>
           </label>
           <label>
             Lands
             <input type="number" id="land-count" name="landCount" min="0" max="99" value="39" required>
           </label>
         </div>
-        <p id="mix-hint" class="mix-hint">90% lift / 10% inclusion of 60 non-lands · 39 lands · 1 commander</p>
+        <p id="mix-hint" class="mix-hint">0% lift / 100% inclusion → 0 + 60 non-lands · 39 lands · 1 commander</p>
       </fieldset>
 
       <fieldset class="options">
@@ -90,7 +90,7 @@
         </li>
         <li>
           <strong>Basics:</strong> whatever slots remain to hit 100 become basic lands,
-          biased about +10 percentage points toward the colors you actually spend in the deck.
+          split in proportion to the colored mana symbols in the deck (commanders + non-lands).
           (EDHREC lands from the earlier passes already count toward the total.)
         </li>
         <li>
