@@ -129,6 +129,23 @@ export function cardManaCost(card) {
 }
 
 /**
+ * Cheapest positive USD price Scryfall reports (usd / foil / etched).
+ * Ignores null/unknown and zero — Scryfall sometimes reports $0 when it
+ * has no real market data for that finish.
+ * @param {object} card
+ * @returns {number | null}
+ */
+export function cardUsdPrice(card) {
+  const p = card?.prices;
+  if (!p) return null;
+  const candidates = [p.usd, p.usd_foil, p.usd_etched]
+    .map((x) => (x == null || x === "" ? NaN : Number.parseFloat(x)))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  if (!candidates.length) return null;
+  return Math.min(...candidates);
+}
+
+/**
  * Batch card metadata via /cards/collection (chunks of 75).
  * @param {string[]} names
  * @returns {Promise<Map<string, object>>} name → card (lowercased key + exact name key)

@@ -1,5 +1,6 @@
 import {
   cardManaCost,
+  cardUsdPrice,
   countPips,
   fetchCollection,
   mergePipCounts,
@@ -20,6 +21,7 @@ const BASIC_BY_COLOR = {
  *   targetLands?: number,
  *   maxGameChangers?: number,
  *   allowTutors?: boolean,
+ *   maxUsd?: number | null,
  * }} BuildOptions
  */
 
@@ -34,6 +36,10 @@ export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
   const targetLands = clampInt(options.targetLands, 0, 99, 39);
   const maxGameChangers = clampInt(options.maxGameChangers, 0, 99, 0);
   const allowTutors = options.allowTutors === true;
+  const maxUsd =
+    typeof options.maxUsd === "number" && Number.isFinite(options.maxUsd)
+      ? options.maxUsd
+      : null;
 
   // Lands input sizes the non-land budget. EDHREC lands picked along the way are extras;
   // basics then fill whatever slots remain to reach 100.
@@ -47,6 +53,9 @@ export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
 
   const liftTarget = Math.round((nonLandSlots * liftPercent) / 100);
   const inclusionTarget = nonLandSlots;
+
+  // Bulk Scryfall lookup for the whole EDHREC pool (75 names per request).
+  const meta = await fetchCollection(pool.map((c) => c.name));
 
   /** @type {Map<string, { name: string, qty: number, isLand: boolean, lift: number, inclusion_pct: number, isGameChanger: boolean }>} */
   const mainboard = new Map();
@@ -73,9 +82,21 @@ export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
   const gameChangerCount = () =>
     [...mainboard.values()].reduce((n, c) => n + (c.isGameChanger ? c.qty : 0), 0);
 
+  const scryFor = (name) => meta.get(name) || meta.get(name.toLowerCase());
+
+  const underBudget = (card) => {
+    if (maxUsd == null) return true;
+    const scry = scryFor(card.name);
+    if (!scry) return false;
+    const price = cardUsdPrice(scry);
+    if (price == null) return false;
+    return price <= maxUsd;
+  };
+
   const allowedByFilters = (card) => {
     if (!allowTutors && isTutorCard(card.name)) return false;
     if (card.isGameChanger && gameChangerCount() >= maxGameChangers) return false;
+    if (!underBudget(card)) return false;
     return true;
   };
 
@@ -105,15 +126,9 @@ export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
     if (nonLandCount() >= inclusionTarget) break;
   }
 
-  const names = [
-    ...commanders.map((c) => c.name),
-    ...[...mainboard.keys()],
-  ];
-  const meta = await fetchCollection(names);
-
   // Refine land flags from Scryfall; don't drop cards — they already earned a slot.
   for (const card of mainboard.values()) {
-    const scry = meta.get(card.name) || meta.get(card.name.toLowerCase());
+    const scry = scryFor(card.name);
     if (scry?.type_line && /\bLand\b/i.test(scry.type_line)) {
       card.isLand = true;
     }
@@ -125,15 +140,13 @@ export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
       tryAdd(card, inclusionTarget);
       if (nonLandCount() >= inclusionTarget) break;
     }
-    const missingMeta = [...mainboard.keys()].filter(
-      (n) => !meta.has(n) && !meta.has(n.toLowerCase())
-    );
+    const missingMeta = [...mainboard.keys()].filter((n) => !scryFor(n));
     if (missingMeta.length) {
       const extra = await fetchCollection(missingMeta);
       for (const [k, v] of extra) meta.set(k, v);
       for (const name of missingMeta) {
         const card = mainboard.get(name);
-        const scry = meta.get(name) || meta.get(name.toLowerCase());
+        const scry = scryFor(name);
         if (card && scry?.type_line && /\bLand\b/i.test(scry.type_line)) {
           card.isLand = true;
         }
@@ -165,6 +178,7 @@ export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
       inclusionNonLands: Math.max(0, inclusionTarget - liftTarget),
       maxGameChangers,
       allowTutors,
+      maxUsd,
     },
   };
 }

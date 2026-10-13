@@ -18,6 +18,7 @@ const mixHint = document.getElementById("mix-hint");
 const liftPercentInput = document.getElementById("lift-percent");
 const landInput = document.getElementById("land-count");
 const maxGameChangersInput = document.getElementById("max-game-changers");
+const maxCardPriceInput = document.getElementById("max-card-price");
 const allowTutorsInput = document.getElementById("allow-tutors");
 const commander1 = document.getElementById("commander-1");
 const commander2 = document.getElementById("commander-2");
@@ -52,11 +53,22 @@ function commanderSlotCount() {
 
 let lastCommanderSlots = commanderSlotCount();
 
+function parseMaxUsd(raw) {
+  const s = String(raw ?? "").trim();
+  if (!s) return null;
+  const n = Number.parseFloat(s);
+  if (!Number.isFinite(n) || n < 0) {
+    throw new Error("Max card price must be a number ≥ 0, or left blank for no limit.");
+  }
+  return n;
+}
+
 function readMix() {
   return {
     liftPercent: Number.parseInt(liftPercentInput.value, 10),
     targetLands: Number.parseInt(landInput.value, 10),
     maxGameChangers: Number.parseInt(maxGameChangersInput.value, 10),
+    maxUsd: parseMaxUsd(maxCardPriceInput.value),
     allowTutors: allowTutorsInput.checked,
   };
 }
@@ -113,9 +125,9 @@ form.addEventListener("submit", async (e) => {
 
   const name1 = commander1.value.trim();
   const name2 = commander2.value.trim();
-  const mix = readMix();
 
   try {
+    const mix = readMix();
     const cmdSlots = name2 ? 2 : 1;
     const nonLands = 100 - cmdSlots - mix.targetLands;
     if (!Number.isFinite(mix.liftPercent) || mix.liftPercent < 0 || mix.liftPercent > 100) {
@@ -153,7 +165,11 @@ form.addEventListener("submit", async (e) => {
       throw new Error("EDHREC returned no card recommendations for this commander.");
     }
 
-    setStatus("Building deck (lift → inclusion → basics)…");
+    setStatus(
+      mix.maxUsd != null
+        ? `Building deck (Scryfall prices ≤ $${mix.maxUsd}, lift → inclusion → basics)…`
+        : "Building deck (lift → inclusion → basics)…"
+    );
     const identity = colorIdentityUnion(commanders);
     const deck = await buildDeck(pool, commanders, identity, mix);
     lastDeckText = formatMoxfield(deck.commanders, deck.mainboard);
@@ -173,9 +189,12 @@ form.addEventListener("submit", async (e) => {
     const gcs = deck.mainboard.reduce((n, c) => n + (c.isGameChanger ? c.qty : 0), 0);
     const liftN = deck.options.liftNonLands;
     const inc = deck.options.inclusionNonLands;
+    const budgetNote =
+      mix.maxUsd != null ? ` · ≤ $${mix.maxUsd}/card` : "";
     setStatus(
       `Done — ${commanders.map((c) => c.name).join(" + ")} · ${liftN} lift + ${inc} inclusion · ` +
-        `${nonbasicQty} nonbasic lands + ${basicQty} basics · ${gcs} game changers · ${mainCount + commanders.length} total.`
+        `${nonbasicQty} nonbasic lands + ${basicQty} basics · ${gcs} game changers` +
+        `${budgetNote} · ${mainCount + commanders.length} total.`
     );
   } catch (err) {
     console.error(err);
