@@ -29,7 +29,7 @@ async function scryfallFetch(url, options = {}) {
  * Resolve a card name via fuzzy named lookup, then Scryfall search.
  * Uses a unique match even when the typed text is incomplete
  * (e.g. "Isilu" → Eirdu, Carrier of Dawn // Isilu, Carrier of Twilight).
- * If search returns several cards but only one can be a commander, use that.
+ * Search fallback is limited to `is:commander` matches.
  * @param {string} name
  */
 export async function lookupCard(name) {
@@ -46,8 +46,9 @@ export async function lookupCard(name) {
 
   let data;
   try {
+    // Restrict to commander-eligible cards so partial names resolve sensibly.
     data = await scryfallFetch(
-      `${SCRYFALL}/cards/search?q=${encodeURIComponent(q)}`
+      `${SCRYFALL}/cards/search?q=${encodeURIComponent(`${q} is:commander`)}`
     );
   } catch (e) {
     if (e.code === "NOT_FOUND") {
@@ -59,61 +60,35 @@ export async function lookupCard(name) {
   const cards = data.data || [];
   if (cards.length === 1) return cards[0];
 
-  const asCommanders = cards.filter(canBeCommander);
-  if (asCommanders.length === 1) return asCommanders[0];
-
   const sample = cards
     .slice(0, 5)
     .map((c) => c.name)
     .join(", ");
   throw new Error(
-    `Ambiguous name "${q}" (${cards.length} matches` +
-      `${asCommanders.length ? `, ${asCommanders.length} possible commanders` : ""}): ` +
+    `Ambiguous name "${q}" (${cards.length} commander matches): ` +
       `${sample}${cards.length > 5 ? "…" : ""}`
   );
 }
 
 /**
- * True if the card can be a commander (not merely commander-legal).
+ * True if Scryfall considers the card a valid commander (`is:commander`).
  * @param {object} card
  */
-export function canBeCommander(card) {
+export async function canBeCommander(card) {
+  if (!card?.oracle_id) return false;
   if (card.legalities?.commander !== "legal") return false;
 
-  const type = card.type_line || "";
-  if (/\bLegendary\b/i.test(type) && /\bCreature\b/i.test(type)) return true;
-
-  const keywords = card.keywords || [];
-  const commanderKeywords = [
-    "Partner",
-    "Partner with",
-    "Friends forever",
-    "Choose a Background",
-    "Doctor's companion",
-  ];
-  if (
-    keywords.some((k) =>
-      commanderKeywords.some((ck) => k.toLowerCase() === ck.toLowerCase())
-    )
-  ) {
-    return true;
+  try {
+    const data = await scryfallFetch(
+      `${SCRYFALL}/cards/search?q=${encodeURIComponent(
+        `oracleid:${card.oracle_id} is:commander`
+      )}`
+    );
+    return (data.total_cards || 0) > 0;
+  } catch (e) {
+    if (e.code === "NOT_FOUND") return false;
+    throw e;
   }
-
-  if (/\bLegendary\b/i.test(type) && /\bBackground\b/i.test(type)) return true;
-
-  const oracle = oracleText(card).toLowerCase();
-  if (oracle.includes("can be your commander")) return true;
-
-  return false;
-}
-
-/** @param {object} card */
-function oracleText(card) {
-  if (card.oracle_text) return card.oracle_text;
-  if (Array.isArray(card.card_faces)) {
-    return card.card_faces.map((f) => f.oracle_text || "").join("\n");
-  }
-  return "";
 }
 
 /**

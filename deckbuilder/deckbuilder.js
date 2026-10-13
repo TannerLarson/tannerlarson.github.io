@@ -147,9 +147,9 @@ form.addEventListener("submit", async (e) => {
     ].filter((x) => x.name);
     for (const { el, name } of inputs) {
       const card = await lookupCard(name);
-      if (!canBeCommander(card)) {
+      if (!(await canBeCommander(card))) {
         throw new Error(
-          `"${card.name}" is not a valid commander (need a legendary creature, partner/background, or similar).`
+          `"${card.name}" is not a valid commander (not in Scryfall is:commander).`
         );
       }
       // Reflect the resolved Scryfall name (helps with DFCs / typos).
