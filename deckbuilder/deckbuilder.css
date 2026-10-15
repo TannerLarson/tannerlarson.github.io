@@ -127,6 +127,41 @@ h1 {
   align-items: end;
 }
 
+.price-input {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.price-input:focus-within {
+  outline: 2px solid var(--accent-dim);
+  outline-offset: 1px;
+}
+
+.price-prefix {
+  display: flex;
+  align-items: center;
+  padding: 0 0 0 0.75rem;
+  color: var(--muted);
+  font-size: 1rem;
+  text-transform: none;
+  letter-spacing: normal;
+  user-select: none;
+}
+
+.price-input input {
+  border: none;
+  background: transparent;
+  padding-left: 0.35rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.price-input input:focus {
+  outline: none;
+}
+
 .checkbox-label {
   display: flex !important;
   flex-direction: row !important;

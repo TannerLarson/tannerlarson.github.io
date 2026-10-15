@@ -47,8 +47,11 @@
             <input type="number" id="max-game-changers" name="maxGameChangers" min="0" max="99" value="0" required>
           </label>
           <label>
-            Max card price ($)
-            <input type="number" id="max-card-price" name="maxCardPrice" min="0" step="0.01" value="30" placeholder="No limit">
+            Max card price
+            <span class="price-input">
+              <span class="price-prefix" aria-hidden="true">$</span>
+              <input type="number" id="max-card-price" name="maxCardPrice" min="0" step="0.01" value="25" placeholder="No limit">
+            </span>
           </label>
           <label class="checkbox-label">
             <input type="checkbox" id="allow-tutors" name="allowTutors">
@@ -98,7 +101,7 @@
           (EDHREC lands from the earlier passes already count toward the total.)
         </li>
         <li>
-          <strong>Filters:</strong> game changers are capped at your max; tutors are skipped unless you allow them;
+          <strong>Filters:</strong> Scryfall game changers are capped at your max; tutors are skipped unless you allow them;
           cards above your max Scryfall USD price (cheapest positive of nonfoil/foil/etched) are skipped.
           Clear the price field for no budget cap. Output is a Moxfield-importable decklist you can copy.
         </li>

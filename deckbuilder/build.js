@@ -60,6 +60,16 @@ export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
   /** @type {Map<string, { name: string, qty: number, isLand: boolean, lift: number, inclusion_pct: number, isGameChanger: boolean }>} */
   const mainboard = new Map();
 
+  const scryFor = (name) => meta.get(name) || meta.get(name.toLowerCase());
+
+  // Scryfall's official flag — EDHREC's per-commander gamechangers list is
+  // often absent (e.g. Yurlok), so relying on it lets Seedborn Muse slip through.
+  const cardIsGameChanger = (card) => {
+    const scry = scryFor(card.name);
+    if (scry && typeof scry.game_changer === "boolean") return scry.game_changer;
+    return !!card.isGameChanger;
+  };
+
   const addCard = (entry) => {
     const existing = mainboard.get(entry.name);
     if (existing) {
@@ -72,7 +82,7 @@ export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
       isLand: !!entry.isLand,
       lift: entry.lift ?? 0,
       inclusion_pct: entry.inclusion_pct ?? 0,
-      isGameChanger: !!entry.isGameChanger,
+      isGameChanger: cardIsGameChanger(entry),
     });
   };
 
@@ -81,8 +91,6 @@ export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
 
   const gameChangerCount = () =>
     [...mainboard.values()].reduce((n, c) => n + (c.isGameChanger ? c.qty : 0), 0);
-
-  const scryFor = (name) => meta.get(name) || meta.get(name.toLowerCase());
 
   const underBudget = (card) => {
     if (maxUsd == null) return true;
@@ -95,7 +103,7 @@ export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
 
   const allowedByFilters = (card) => {
     if (!allowTutors && isTutorCard(card.name)) return false;
-    if (card.isGameChanger && gameChangerCount() >= maxGameChangers) return false;
+    if (cardIsGameChanger(card) && gameChangerCount() >= maxGameChangers) return false;
     if (!underBudget(card)) return false;
     return true;
   };
