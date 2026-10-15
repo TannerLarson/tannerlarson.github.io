@@ -71,12 +71,12 @@ export async function lookupCard(name) {
 }
 
 /**
- * True if Scryfall considers the card a valid commander (`is:commander`).
+ * True if Scryfall considers the card a commander (`is:commander`).
+ * Ignores format legality / bans — only the commander role matters.
  * @param {object} card
  */
 export async function canBeCommander(card) {
   if (!card?.oracle_id) return false;
-  if (card.legalities?.commander !== "legal") return false;
 
   try {
     const data = await scryfallFetch(
