@@ -4,13 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>EDH Deckbuilder</title>
-  <!-- Without a trailing slash, relative module URLs resolve to /deckbuilder.js (404). -->
-  <script>
-    if (!/\/$|\.html?$/i.test(location.pathname)) {
-      location.replace(location.pathname + "/" + location.search + location.hash);
-    }
-  </script>
-  <link rel="stylesheet" href="./deckbuilder.css">
+  <link rel="stylesheet" href="deckbuilder.css">
 </head>
 <body>
   <main class="app">
@@ -20,7 +14,7 @@
       then top up the remaining slots with pip-biased basics. Copy a Moxfield-importable decklist.
     </p>
 
-    <form id="build-form" class="build-form" action="#" method="get" onsubmit="event.preventDefault()">
+    <form id="build-form" class="build-form">
       <label>
         Commander
         <input type="text" id="commander-1" name="commander1" required placeholder="Krenko, Mob Boss" autocomplete="off">
@@ -113,6 +107,6 @@
     </section>
   </main>
 
-  <script type="module" src="./deckbuilder.js"></script>
+  <script type="module" src="deckbuilder.js?v=synergy-1"></script>
 </body>
 </html>

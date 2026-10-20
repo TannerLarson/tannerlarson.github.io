@@ -15,7 +15,11 @@ const previewEl = document.getElementById("deck-preview");
 const buildBtn = document.getElementById("build-btn");
 const copyBtn = document.getElementById("copy-btn");
 const mixHint = document.getElementById("mix-hint");
-const synergyPercentInput = document.getElementById("synergy-percent");
+// Accept either id so a cached HTML/JS mismatch after the lift→synergy rename
+// can't null-deref during init and leave the form without a submit handler.
+const synergyPercentInput =
+  document.getElementById("synergy-percent") ||
+  document.getElementById("lift-percent");
 const landInput = document.getElementById("land-count");
 const maxGameChangersInput = document.getElementById("max-game-changers");
 const maxCardPriceInput = document.getElementById("max-card-price");
@@ -111,7 +115,9 @@ function updateMixHint() {
   mixHint.classList.remove("invalid");
 }
 
-async function onBuildSubmit(e) {
+// Bind submit before mix-hint setup — a missing percent input must not leave
+// the form doing a full page navigation on Enter.
+form.addEventListener("submit", async (e) => {
   e.preventDefault();
   setError("");
   resultsEl.hidden = true;
@@ -122,6 +128,11 @@ async function onBuildSubmit(e) {
   const name2 = commander2.value.trim();
 
   try {
+    if (!synergyPercentInput) {
+      throw new Error(
+        "Missing synergy % input (hard-refresh if the page was cached mid-update)."
+      );
+    }
     const mix = readMix();
     const cmdSlots = name2 ? 2 : 1;
     const nonLands = 100 - cmdSlots - mix.targetLands;
@@ -198,11 +209,7 @@ async function onBuildSubmit(e) {
   } finally {
     buildBtn.disabled = false;
   }
-}
-
-if (form) {
-  form.addEventListener("submit", onBuildSubmit);
-}
+});
 
 for (const el of [synergyPercentInput, landInput, commander1, commander2]) {
   el?.addEventListener("input", updateMixHint);
@@ -211,7 +218,7 @@ if (synergyPercentInput && landInput && mixHint && commander2) {
   updateMixHint();
 }
 
-copyBtn?.addEventListener("click", async () => {
+copyBtn.addEventListener("click", async () => {
   if (!lastDeckText) return;
   const label = copyBtn.textContent;
   try {
