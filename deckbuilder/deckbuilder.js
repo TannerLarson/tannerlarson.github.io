@@ -24,6 +24,7 @@ const commander1 = document.getElementById("commander-1");
 const commander2 = document.getElementById("commander-2");
 
 let lastDeckText = "";
+let lastCommanderSlots = commander2?.value.trim() ? 2 : 1;
 
 function setStatus(msg) {
   statusEl.textContent = msg || "";
@@ -50,8 +51,6 @@ function colorIdentityUnion(commanders) {
 function commanderSlotCount() {
   return commander2.value.trim() ? 2 : 1;
 }
-
-let lastCommanderSlots = commanderSlotCount();
 
 function parseMaxUsd(raw) {
   const s = String(raw ?? "").trim();
@@ -112,12 +111,7 @@ function updateMixHint() {
   mixHint.classList.remove("invalid");
 }
 
-for (const el of [synergyPercentInput, landInput, commander1, commander2]) {
-  el.addEventListener("input", updateMixHint);
-}
-updateMixHint();
-
-form.addEventListener("submit", async (e) => {
+async function onBuildSubmit(e) {
   e.preventDefault();
   setError("");
   resultsEl.hidden = true;
@@ -204,9 +198,20 @@ form.addEventListener("submit", async (e) => {
   } finally {
     buildBtn.disabled = false;
   }
-});
+}
 
-copyBtn.addEventListener("click", async () => {
+if (form) {
+  form.addEventListener("submit", onBuildSubmit);
+}
+
+for (const el of [synergyPercentInput, landInput, commander1, commander2]) {
+  el?.addEventListener("input", updateMixHint);
+}
+if (synergyPercentInput && landInput && mixHint && commander2) {
+  updateMixHint();
+}
+
+copyBtn?.addEventListener("click", async () => {
   if (!lastDeckText) return;
   const label = copyBtn.textContent;
   try {
