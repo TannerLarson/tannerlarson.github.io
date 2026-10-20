@@ -15,7 +15,7 @@ const previewEl = document.getElementById("deck-preview");
 const buildBtn = document.getElementById("build-btn");
 const copyBtn = document.getElementById("copy-btn");
 const mixHint = document.getElementById("mix-hint");
-const liftPercentInput = document.getElementById("lift-percent");
+const synergyPercentInput = document.getElementById("synergy-percent");
 const landInput = document.getElementById("land-count");
 const maxGameChangersInput = document.getElementById("max-game-changers");
 const maxCardPriceInput = document.getElementById("max-card-price");
@@ -65,7 +65,7 @@ function parseMaxUsd(raw) {
 
 function readMix() {
   return {
-    liftPercent: Number.parseInt(liftPercentInput.value, 10),
+    synergyPercent: Number.parseInt(synergyPercentInput.value, 10),
     targetLands: Number.parseInt(landInput.value, 10),
     maxGameChangers: Number.parseInt(maxGameChangersInput.value, 10),
     maxUsd: parseMaxUsd(maxCardPriceInput.value),
@@ -84,7 +84,7 @@ function updateMixHint() {
     lastCommanderSlots = slots;
   }
 
-  const pct = Number.parseInt(liftPercentInput.value, 10);
+  const pct = Number.parseInt(synergyPercentInput.value, 10);
   const lands = Number.parseInt(landInput.value, 10);
   const cmd = slots;
   const nonLands = 100 - cmd - (Number.isFinite(lands) ? lands : 0);
@@ -97,21 +97,22 @@ function updateMixHint() {
     nonLands >= 0;
 
   if (!valid) {
-    mixHint.textContent = "Lift % must be 0–100; lands + commanders must leave room for non-lands.";
+    mixHint.textContent =
+      "Synergy % must be 0–100; lands + commanders must leave room for non-lands.";
     mixHint.classList.add("invalid");
     return;
   }
 
-  const liftCards = Math.round((nonLands * pct) / 100);
-  const inclusionCards = nonLands - liftCards;
+  const synergyCards = Math.round((nonLands * pct) / 100);
+  const inclusionCards = nonLands - synergyCards;
   const inclusionPct = 100 - pct;
   const cmdLabel = cmd === 1 ? "1 commander" : "2 commanders";
   mixHint.textContent =
-    `${pct}% lift / ${inclusionPct}% inclusion → ${liftCards} + ${inclusionCards} non-lands · ${lands} lands · ${cmdLabel}`;
+    `${pct}% synergy / ${inclusionPct}% inclusion → ${synergyCards} + ${inclusionCards} non-lands · ${lands} lands · ${cmdLabel}`;
   mixHint.classList.remove("invalid");
 }
 
-for (const el of [liftPercentInput, landInput, commander1, commander2]) {
+for (const el of [synergyPercentInput, landInput, commander1, commander2]) {
   el.addEventListener("input", updateMixHint);
 }
 updateMixHint();
@@ -130,8 +131,8 @@ form.addEventListener("submit", async (e) => {
     const mix = readMix();
     const cmdSlots = name2 ? 2 : 1;
     const nonLands = 100 - cmdSlots - mix.targetLands;
-    if (!Number.isFinite(mix.liftPercent) || mix.liftPercent < 0 || mix.liftPercent > 100) {
-      throw new Error("Lift % must be between 0 and 100.");
+    if (!Number.isFinite(mix.synergyPercent) || mix.synergyPercent < 0 || mix.synergyPercent > 100) {
+      throw new Error("Synergy % must be between 0 and 100.");
     }
     if (!Number.isFinite(mix.targetLands) || mix.targetLands < 0 || nonLands < 0) {
       throw new Error(
@@ -167,8 +168,8 @@ form.addEventListener("submit", async (e) => {
 
     setStatus(
       mix.maxUsd != null
-        ? `Building deck (Scryfall prices ≤ $${mix.maxUsd}, lift → inclusion → basics)…`
-        : "Building deck (lift → inclusion → basics)…"
+        ? `Building deck (Scryfall prices ≤ $${mix.maxUsd}, synergy → inclusion → basics)…`
+        : "Building deck (synergy → inclusion → basics)…"
     );
     const identity = colorIdentityUnion(commanders);
     const deck = await buildDeck(pool, commanders, identity, mix);
@@ -187,12 +188,12 @@ form.addEventListener("submit", async (e) => {
       .filter((c) => !BASIC_NAMES.has(c.name))
       .reduce((n, c) => n + c.qty, 0);
     const gcs = deck.mainboard.reduce((n, c) => n + (c.isGameChanger ? c.qty : 0), 0);
-    const liftN = deck.options.liftNonLands;
+    const synergyN = deck.options.synergyNonLands;
     const inc = deck.options.inclusionNonLands;
     const budgetNote =
       mix.maxUsd != null ? ` · ≤ $${mix.maxUsd}/card` : "";
     setStatus(
-      `Done — ${commanders.map((c) => c.name).join(" + ")} · ${liftN} lift + ${inc} inclusion · ` +
+      `Done — ${commanders.map((c) => c.name).join(" + ")} · ${synergyN} synergy + ${inc} inclusion · ` +
         `${nonbasicQty} nonbasic lands + ${basicQty} basics · ${gcs} game changers` +
         `${budgetNote} · ${mainCount + commanders.length} total.`
     );
