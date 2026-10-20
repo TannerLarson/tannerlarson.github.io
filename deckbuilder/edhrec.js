@@ -1,6 +1,8 @@
 import { EDHREC_PROXY_URL } from "./config.js";
 
-const TYPE_TAGS = new Set([
+// Type-tagged lists plus EDHREC meta buckets. Top / high-lift / new cards are
+// *not* duplicated into creatures/etc. anymore — skipping them drops staples.
+const POOL_TAGS = new Set([
   "creatures",
   "instants",
   "sorceries",
@@ -11,6 +13,10 @@ const TYPE_TAGS = new Set([
   "planeswalkers",
   "utilitylands",
   "lands",
+  "topcards",
+  "highliftcards",
+  "highsynergycards", // legacy name before Lift
+  "newcards",
 ]);
 
 const LAND_TAGS = new Set(["lands", "utilitylands"]);
@@ -123,7 +129,7 @@ export function extractGameChangerNames(edhrecPayload) {
 }
 
 /**
- * Merge type-tagged cardlists into an Ungrouped pool.
+ * Merge EDHREC cardlists into an Ungrouped pool (type tags + top/high-lift/new).
  * Prefers EDHREC's Lift metric (falls back to legacy Synergy if Lift is absent).
  * @param {object} edhrecPayload
  * @param {Set<string>} [gameChangers]
@@ -136,7 +142,7 @@ export function buildUngroupedPool(edhrecPayload, gameChangers = new Set()) {
 
   for (const list of lists) {
     const tag = list.tag || "";
-    if (!TYPE_TAGS.has(tag)) continue;
+    if (!POOL_TAGS.has(tag)) continue;
     const isLand = LAND_TAGS.has(tag);
 
     for (const cv of list.cardviews || []) {
