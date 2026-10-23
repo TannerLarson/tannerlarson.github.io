@@ -3,6 +3,7 @@ import {
   cardUsdPrice,
   countPips,
   fetchCollection,
+  fillMissingUsdPrices,
   mergePipCounts,
 } from "./scryfall.js";
 import { isTutorCard } from "./filters.js";
@@ -56,6 +57,11 @@ export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
 
   // Bulk Scryfall lookup for the whole EDHREC pool (75 names per request).
   const meta = await fetchCollection(pool.map((c) => c.name));
+  // Default prints can be digital-only with null USD (e.g. Mana Flare / ME1).
+  // When budgeting, resolve a paper print so those aren't false-rejected.
+  if (maxUsd != null) {
+    await fillMissingUsdPrices(meta);
+  }
 
   /** @type {Map<string, { name: string, qty: number, isLand: boolean, synergy: number, inclusion_pct: number, isGameChanger: boolean }>} */
   const mainboard = new Map();
@@ -97,7 +103,8 @@ export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
     const scry = scryFor(card.name);
     if (!scry) return false;
     const price = cardUsdPrice(scry);
-    if (price == null) return false;
+    // Still null after fillMissingUsdPrices → no market USD; don't false-reject.
+    if (price == null) return true;
     return price <= maxUsd;
   };
 

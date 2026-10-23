@@ -120,6 +120,16 @@ export function cardUsdPrice(card) {
   return Math.min(...candidates);
 }
 
+function indexCard(byName, card) {
+  byName.set(card.name.toLowerCase(), card);
+  byName.set(card.name, card);
+  const front = card.name.split(/\s*\/\/\s*/)[0];
+  if (front && front !== card.name) {
+    byName.set(front.toLowerCase(), card);
+    byName.set(front, card);
+  }
+}
+
 /**
  * Batch card metadata via /cards/collection (chunks of 75).
  * @param {string[]} names
@@ -141,14 +151,7 @@ export async function fetchCollection(names) {
     });
 
     for (const card of data.data || []) {
-      byName.set(card.name.toLowerCase(), card);
-      byName.set(card.name, card);
-      // Also index front face for DFC lookups
-      const front = card.name.split(/\s*\/\/\s*/)[0];
-      if (front && front !== card.name) {
-        byName.set(front.toLowerCase(), card);
-        byName.set(front, card);
-      }
+      indexCard(byName, card);
     }
 
     if (i + 75 < unique.length) {
@@ -157,6 +160,40 @@ export async function fetchCollection(names) {
   }
 
   return byName;
+}
+
+/**
+ * For cards whose default Scryfall print has no USD (e.g. Masters Edition
+ * digital), replace with the cheapest print that has a positive USD price.
+ * Mutates `byName` in place.
+ * @param {Map<string, object>} byName
+ */
+export async function fillMissingUsdPrices(byName) {
+  const seen = new Set();
+  const missing = [];
+  for (const card of byName.values()) {
+    if (!card?.name || seen.has(card.name)) continue;
+    seen.add(card.name);
+    if (cardUsdPrice(card) == null) missing.push(card.name);
+  }
+
+  for (let i = 0; i < missing.length; i++) {
+    const name = missing[i];
+    try {
+      // Prefer paper prints with a real market price, cheapest first.
+      const q = `!"${name}" unique:prints -is:digital usd>0`;
+      const data = await scryfallFetch(
+        `${SCRYFALL}/cards/search?q=${encodeURIComponent(q)}&order=usd&dir=asc`
+      );
+      const priced = (data.data || []).find((c) => cardUsdPrice(c) != null);
+      if (priced) indexCard(byName, priced);
+    } catch (e) {
+      if (e.code !== "NOT_FOUND") throw e;
+    }
+    if (i + 1 < missing.length) {
+      await new Promise((r) => setTimeout(r, 100));
+    }
+  }
 }
 
 const COLOR_PIP_RE = /\{([WUBRGC])(?:\/([WUBRGC]))?\}/gi;
