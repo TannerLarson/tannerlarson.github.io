@@ -3,7 +3,6 @@ import {
   cardUsdPrice,
   countPips,
   fetchCollection,
-  fillMissingUsdPrices,
   mergePipCounts,
 } from "./scryfall.js";
 import { isTutorCard } from "./filters.js";
@@ -15,6 +14,8 @@ const BASIC_BY_COLOR = {
   R: "Mountain",
   G: "Forest",
 };
+
+const COLLECTION_CHUNK = 75;
 
 /**
  * @typedef {{
@@ -55,21 +56,18 @@ export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
   const synergyTarget = Math.round((nonLandSlots * synergyPercent) / 100);
   const inclusionTarget = nonLandSlots;
 
-  // Bulk Scryfall lookup for the whole EDHREC pool (75 names per request).
-  const meta = await fetchCollection(pool.map((c) => c.name));
-  // Default prints can be digital-only with null USD (e.g. Mana Flare / ME1).
-  // When budgeting, resolve a paper print so those aren't false-rejected.
-  if (maxUsd != null) {
-    await fillMissingUsdPrices(meta);
-  }
+  // Price / game-changer filters need Scryfall fields. Otherwise we can walk on
+  // EDHREC tags alone and only collection-fetch the final mainboard for pips.
+  const needsLiveMeta = maxUsd != null || maxGameChangers < 99;
+
+  /** @type {Map<string, object>} */
+  const meta = new Map();
 
   /** @type {Map<string, { name: string, qty: number, isLand: boolean, synergy: number, inclusion_pct: number, isGameChanger: boolean }>} */
   const mainboard = new Map();
 
   const scryFor = (name) => meta.get(name) || meta.get(name.toLowerCase());
 
-  // Scryfall's official flag — EDHREC's per-commander gamechangers list is
-  // often absent (e.g. Yurlok), so relying on it lets Seedborn Muse slip through.
   const cardIsGameChanger = (card) => {
     const scry = scryFor(card.name);
     if (scry && typeof scry.game_changer === "boolean") return scry.game_changer;
@@ -103,45 +101,97 @@ export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
     const scry = scryFor(card.name);
     if (!scry) return false;
     const price = cardUsdPrice(scry);
-    // Still null after fillMissingUsdPrices → no market USD; don't false-reject.
+    // Digital-only default prints (e.g. Mana Flare / ME1) have null USD.
     if (price == null) return true;
     return price <= maxUsd;
   };
 
   const allowedByFilters = (card) => {
     if (!allowTutors && isTutorCard(card.name)) return false;
-    if (cardIsGameChanger(card) && gameChangerCount() >= maxGameChangers) return false;
-    if (!underBudget(card)) return false;
+    if (needsLiveMeta) {
+      if (!scryFor(card.name)) return false;
+      if (cardIsGameChanger(card) && gameChangerCount() >= maxGameChangers) return false;
+      if (!underBudget(card)) return false;
+    } else if (card.isGameChanger && gameChangerCount() >= maxGameChangers) {
+      return false;
+    }
     return true;
   };
 
   /**
-   * Add every card (lands included). Stop condition is non-land count only.
    * @param {typeof pool[0]} card
    * @param {number} nonLandCap
    */
   const tryAdd = (card, nonLandCap) => {
     if (!allowedByFilters(card)) return;
     if (mainboard.has(card.name)) return;
-    // Once non-land cap is hit we stop the pass entirely (caller breaks).
-    // Lands encountered before that cap are always added.
     if (!card.isLand && nonLandCount() >= nonLandCap) return;
     addCard(card);
   };
 
+  /**
+   * Prefetch the next window of candidates that still need Scryfall meta, then
+   * walk until the non-land cap — avoids /cards/collection on the whole pool.
+   * @param {typeof pool} sorted
+   * @param {number} nonLandCap
+   */
+  const walkPass = async (sorted, nonLandCap) => {
+    let i = 0;
+    while (i < sorted.length && nonLandCount() < nonLandCap) {
+      if (needsLiveMeta) {
+        const prefetch = [];
+        for (let j = i; j < sorted.length && prefetch.length < COLLECTION_CHUNK; j++) {
+          const c = sorted[j];
+          if (mainboard.has(c.name)) continue;
+          if (!allowTutors && isTutorCard(c.name)) continue;
+          if (!scryFor(c.name)) prefetch.push(c.name);
+        }
+        if (prefetch.length) await fetchCollection(prefetch, meta);
+      }
+
+      const startCount = nonLandCount();
+      const startIdx = i;
+      while (i < sorted.length && nonLandCount() < nonLandCap) {
+        const card = sorted[i];
+        if (needsLiveMeta && !mainboard.has(card.name) && !scryFor(card.name)) {
+          // Need another prefetch window.
+          if (!allowTutors && isTutorCard(card.name)) {
+            i++;
+            continue;
+          }
+          break;
+        }
+        tryAdd(card, nonLandCap);
+        i++;
+      }
+
+      // No progress and still missing meta on current card — fetch it alone.
+      if (
+        i === startIdx &&
+        nonLandCount() === startCount &&
+        i < sorted.length &&
+        needsLiveMeta &&
+        !scryFor(sorted[i].name)
+      ) {
+        await fetchCollection([sorted[i].name], meta);
+        tryAdd(sorted[i], nonLandCap);
+        i++;
+      } else if (i === startIdx && nonLandCount() === startCount) {
+        i++; // avoid infinite loop on a stubborn card
+      }
+    }
+  };
+
   const bySynergy = [...pool].sort((a, b) => b.synergy - a.synergy);
-  for (const card of bySynergy) {
-    tryAdd(card, synergyTarget);
-    if (nonLandCount() >= synergyTarget) break;
-  }
-
   const byInclusion = [...pool].sort((a, b) => b.inclusion_pct - a.inclusion_pct);
-  for (const card of byInclusion) {
-    tryAdd(card, inclusionTarget);
-    if (nonLandCount() >= inclusionTarget) break;
-  }
 
-  // Refine land flags from Scryfall; don't drop cards — they already earned a slot.
+  await walkPass(bySynergy, synergyTarget);
+  await walkPass(byInclusion, inclusionTarget);
+
+  // Ensure mainboard has Scryfall rows for land refine + pip basics.
+  const missingMain = [...mainboard.keys()].filter((n) => !scryFor(n));
+  if (missingMain.length) await fetchCollection(missingMain, meta);
+
   for (const card of mainboard.values()) {
     const scry = scryFor(card.name);
     if (scry?.type_line && /\bLand\b/i.test(scry.type_line)) {
@@ -149,22 +199,14 @@ export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
     }
   }
 
-  // If reclassification put us under the non-land target, keep walking inclusion.
   if (nonLandCount() < inclusionTarget) {
-    for (const card of byInclusion) {
-      tryAdd(card, inclusionTarget);
-      if (nonLandCount() >= inclusionTarget) break;
-    }
-    const missingMeta = [...mainboard.keys()].filter((n) => !scryFor(n));
-    if (missingMeta.length) {
-      const extra = await fetchCollection(missingMeta);
-      for (const [k, v] of extra) meta.set(k, v);
-      for (const name of missingMeta) {
-        const card = mainboard.get(name);
-        const scry = scryFor(name);
-        if (card && scry?.type_line && /\bLand\b/i.test(scry.type_line)) {
-          card.isLand = true;
-        }
+    await walkPass(byInclusion, inclusionTarget);
+    const missingMore = [...mainboard.keys()].filter((n) => !scryFor(n));
+    if (missingMore.length) await fetchCollection(missingMore, meta);
+    for (const card of mainboard.values()) {
+      const scry = scryFor(card.name);
+      if (scry?.type_line && /\bLand\b/i.test(scry.type_line)) {
+        card.isLand = true;
       }
     }
   }
@@ -232,7 +274,7 @@ function allocateBasics(mainboard, meta, commanders, colors, basicsNeeded) {
     pips = mergePipCounts(pips, countPips(cardManaCost(cmd)));
   }
   for (const card of mainboard.values()) {
-    if (card.isLand) continue; // lands usually have no pips; skip anyway
+    if (card.isLand) continue;
     const scry = meta.get(card.name) || meta.get(card.name.toLowerCase());
     if (!scry) continue;
     const costPips = countPips(cardManaCost(scry));
@@ -241,13 +283,9 @@ function allocateBasics(mainboard, meta, commanders, colors, basicsNeeded) {
     }
   }
 
-  // Only identity colors count toward the ratio.
-  const weights = Object.fromEntries(
-    colors.map((c) => [c, pips[c] || 0])
-  );
+  const weights = Object.fromEntries(colors.map((c) => [c, pips[c] || 0]));
   let weightTotal = colors.reduce((n, c) => n + weights[c], 0);
   if (weightTotal <= 0) {
-    // No colored pips found — split evenly across identity.
     for (const c of colors) weights[c] = 1;
     weightTotal = colors.length;
   }
@@ -263,7 +301,6 @@ function allocateBasics(mainboard, meta, commanders, colors, basicsNeeded) {
     remainders.push({ c, frac: exact - whole });
   }
 
-  // Largest remainder: hand out leftover basics to colors that were rounded down most.
   remainders.sort((a, b) => b.frac - a.frac || a.c.localeCompare(b.c));
   let left = basicsNeeded - assigned;
   for (let i = 0; left > 0; i++, left--) {

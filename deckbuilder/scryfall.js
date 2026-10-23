@@ -2,17 +2,47 @@ import { SCRYFALL_USER_AGENT } from "./config.js";
 
 const SCRYFALL = "https://api.scryfall.com";
 
+// https://scryfall.com/docs/api/rate-limits — these endpoints are 2/sec.
+const SLOW_PATH_RE = /\/cards\/(search|named|collection|random)(?:\?|$)/;
+const SLOW_GAP_MS = 550;
+
 const headers = {
   Accept: "application/json",
   "User-Agent": SCRYFALL_USER_AGENT,
 };
 
-async function scryfallFetch(url, options = {}) {
+/** @type {Promise<void>} */
+let rateLock = Promise.resolve();
+let nextSlowOkAt = 0;
+
+function enqueueSlowGap() {
+  const run = rateLock.then(async () => {
+    const wait = nextSlowOkAt - Date.now();
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    nextSlowOkAt = Date.now() + SLOW_GAP_MS;
+  });
+  rateLock = run.catch(() => {});
+  return run;
+}
+
+async function scryfallFetch(url, options = {}, retried = false) {
+  if (SLOW_PATH_RE.test(url)) {
+    await enqueueSlowGap();
+  }
+
   const res = await fetch(url, {
     ...options,
     headers: { ...headers, ...(options.headers || {}) },
   });
   const data = await res.json().catch(() => ({}));
+
+  if (res.status === 429 && !retried) {
+    const retryAfter = Number.parseInt(res.headers.get("Retry-After") || "", 10);
+    const delayMs = Number.isFinite(retryAfter) ? retryAfter * 1000 : 30_000;
+    await new Promise((r) => setTimeout(r, delayMs));
+    return scryfallFetch(url, options, true);
+  }
+
   if (!res.ok) {
     const err = new Error(
       data.details || data.error || `Scryfall error ${res.status}`
@@ -46,7 +76,6 @@ export async function lookupCard(name) {
 
   let data;
   try {
-    // Restrict to commander-eligible cards so partial names resolve sensibly.
     data = await scryfallFetch(
       `${SCRYFALL}/cards/search?q=${encodeURIComponent(`${q} is:commander`)}`
     );
@@ -71,11 +100,46 @@ export async function lookupCard(name) {
 }
 
 /**
- * True if Scryfall considers the card a commander (`is:commander`).
- * Ignores format legality / bans — only the commander role matters.
+ * Cheap local check from an already-fetched card object.
+ * @param {object} card
+ * @returns {boolean | null} true / false / null if we should ask Scryfall search
+ */
+export function localCommanderEligibility(card) {
+  if (!card) return false;
+
+  const typeLines = [];
+  const texts = [];
+  if (card.type_line) typeLines.push(card.type_line);
+  if (card.oracle_text) texts.push(card.oracle_text);
+  for (const face of card.card_faces || []) {
+    if (face.type_line) typeLines.push(face.type_line);
+    if (face.oracle_text) texts.push(face.oracle_text);
+  }
+
+  if (typeLines.some((t) => /\bLegendary\b/i.test(t) && /\bCreature\b/i.test(t))) {
+    return true;
+  }
+  if (texts.some((t) => /can be your commander/i.test(t))) {
+    return true;
+  }
+  // Backgrounds are commanders for the partner slot; cheap to accept locally.
+  if (typeLines.some((t) => /\bBackground\b/i.test(t))) {
+    return true;
+  }
+
+  // Planeswalkers / oddballs: don't guess — use is:commander search.
+  return null;
+}
+
+/**
+ * True if the card can be a commander. Prefers local card fields; only hits
+ * /cards/search when the object isn't decisive (avoids a redundant round-trip
+ * for normal legendary creatures).
  * @param {object} card
  */
 export async function canBeCommander(card) {
+  const local = localCommanderEligibility(card);
+  if (local != null) return local;
   if (!card?.oracle_id) return false;
 
   try {
@@ -120,24 +184,21 @@ export function cardUsdPrice(card) {
   return Math.min(...candidates);
 }
 
-function indexCard(byName, card) {
-  byName.set(card.name.toLowerCase(), card);
-  byName.set(card.name, card);
-  const front = card.name.split(/\s*\/\/\s*/)[0];
-  if (front && front !== card.name) {
-    byName.set(front.toLowerCase(), card);
-    byName.set(front, card);
-  }
-}
-
 /**
  * Batch card metadata via /cards/collection (chunks of 75).
+ * Merges into `into` when provided (lazy-fetch helper).
  * @param {string[]} names
- * @returns {Promise<Map<string, object>>} name → card (lowercased key + exact name key)
+ * @param {Map<string, object>} [into]
+ * @returns {Promise<Map<string, object>>}
  */
-export async function fetchCollection(names) {
-  const unique = [...new Set(names.filter(Boolean))];
-  const byName = new Map();
+export async function fetchCollection(names, into = new Map()) {
+  const unique = [
+    ...new Set(
+      names.filter(
+        (n) => n && !into.has(n) && !into.has(String(n).toLowerCase())
+      )
+    ),
+  ];
 
   for (let i = 0; i < unique.length; i += 75) {
     const chunk = unique.slice(i, i + 75);
@@ -151,49 +212,17 @@ export async function fetchCollection(names) {
     });
 
     for (const card of data.data || []) {
-      indexCard(byName, card);
-    }
-
-    if (i + 75 < unique.length) {
-      await new Promise((r) => setTimeout(r, 100));
-    }
-  }
-
-  return byName;
-}
-
-/**
- * For cards whose default Scryfall print has no USD (e.g. Masters Edition
- * digital), replace with the cheapest print that has a positive USD price.
- * Mutates `byName` in place.
- * @param {Map<string, object>} byName
- */
-export async function fillMissingUsdPrices(byName) {
-  const seen = new Set();
-  const missing = [];
-  for (const card of byName.values()) {
-    if (!card?.name || seen.has(card.name)) continue;
-    seen.add(card.name);
-    if (cardUsdPrice(card) == null) missing.push(card.name);
-  }
-
-  for (let i = 0; i < missing.length; i++) {
-    const name = missing[i];
-    try {
-      // Prefer paper prints with a real market price, cheapest first.
-      const q = `!"${name}" unique:prints -is:digital usd>0`;
-      const data = await scryfallFetch(
-        `${SCRYFALL}/cards/search?q=${encodeURIComponent(q)}&order=usd&dir=asc`
-      );
-      const priced = (data.data || []).find((c) => cardUsdPrice(c) != null);
-      if (priced) indexCard(byName, priced);
-    } catch (e) {
-      if (e.code !== "NOT_FOUND") throw e;
-    }
-    if (i + 1 < missing.length) {
-      await new Promise((r) => setTimeout(r, 100));
+      into.set(card.name.toLowerCase(), card);
+      into.set(card.name, card);
+      const front = card.name.split(/\s*\/\/\s*/)[0];
+      if (front && front !== card.name) {
+        into.set(front.toLowerCase(), card);
+        into.set(front, card);
+      }
     }
   }
+
+  return into;
 }
 
 const COLOR_PIP_RE = /\{([WUBRGC])(?:\/([WUBRGC]))?\}/gi;
