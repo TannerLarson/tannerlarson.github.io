@@ -86,17 +86,17 @@
         </li>
         <li>
           <strong>Synergy pass:</strong> sort the pool by EDHREC Synergy and walk top → bottom, adding
-          <em>every</em> card (lands included). Stop when non-lands reach your synergy % of the
+          cards (lands count toward your land budget). Stop when non-lands reach your synergy % of the
           non-land budget (budget = 100 − commanders − lands).
         </li>
         <li>
           <strong>Inclusion pass:</strong> re-sort by inclusion rate and walk again, adding every
-          new card (lands included) until the non-land budget is full.
+          new card (still respecting the land budget) until the non-land budget is full.
         </li>
         <li>
           <strong>Basics:</strong> whatever slots remain to hit 100 become basic lands,
           split in proportion to the colored mana symbols in the deck (commanders + non-lands).
-          (EDHREC lands from the earlier passes already count toward the total.)
+          (EDHREC lands from the earlier passes already count toward the land budget.)
         </li>
         <li>
           <strong>Filters:</strong> Scryfall game changers are capped at your max; tutors are skipped unless you allow them;

@@ -43,8 +43,8 @@ export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
       ? options.maxUsd
       : null;
 
-  // Lands input sizes the non-land budget. EDHREC lands picked along the way are extras;
-  // basics then fill whatever slots remain to reach 100.
+  // Lands input sets the land budget and (via 100 − commanders − lands) the
+  // non-land budget. EDHREC lands count toward the land budget; basics fill the rest.
   const nonLandSlots = 100 - commanders.length - targetLands;
   if (nonLandSlots < 0) {
     throw new Error(
@@ -93,6 +93,9 @@ export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
   const nonLandCount = () =>
     [...mainboard.values()].reduce((n, c) => n + (c.isLand ? 0 : c.qty), 0);
 
+  const landCount = () =>
+    [...mainboard.values()].reduce((n, c) => n + (c.isLand ? c.qty : 0), 0);
+
   const gameChangerCount = () =>
     [...mainboard.values()].reduce((n, c) => n + (c.isGameChanger ? c.qty : 0), 0);
 
@@ -119,13 +122,41 @@ export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
   };
 
   /**
+   * Drop lowest-synergy lands until the land budget fits. Needed when Scryfall
+   * reclassifies a picked spell as a land (common for land-matters commanders).
+   */
+  const trimExcessLands = () => {
+    let excess = landCount() - targetLands;
+    if (excess <= 0) return;
+    const lands = [...mainboard.values()]
+      .filter((c) => c.isLand)
+      .sort(
+        (a, b) =>
+          a.synergy - b.synergy ||
+          a.inclusion_pct - b.inclusion_pct ||
+          a.name.localeCompare(b.name)
+      );
+    for (const card of lands) {
+      if (excess <= 0) break;
+      const remove = Math.min(card.qty, excess);
+      card.qty -= remove;
+      excess -= remove;
+      if (card.qty <= 0) mainboard.delete(card.name);
+    }
+  };
+
+  /**
    * @param {typeof pool[0]} card
    * @param {number} nonLandCap
    */
   const tryAdd = (card, nonLandCap) => {
     if (!allowedByFilters(card)) return;
     if (mainboard.has(card.name)) return;
-    if (!card.isLand && nonLandCount() >= nonLandCap) return;
+    if (card.isLand) {
+      if (landCount() >= targetLands) return;
+    } else if (nonLandCount() >= nonLandCap) {
+      return;
+    }
     addCard(card);
   };
 
@@ -198,6 +229,7 @@ export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
       card.isLand = true;
     }
   }
+  trimExcessLands();
 
   if (nonLandCount() < inclusionTarget) {
     await walkPass(byInclusion, inclusionTarget);
@@ -209,6 +241,7 @@ export async function buildDeck(pool, commanders, colorIdentity, options = {}) {
         card.isLand = true;
       }
     }
+    trimExcessLands();
   }
 
   const mainboardCount = [...mainboard.values()].reduce((n, c) => n + c.qty, 0);
