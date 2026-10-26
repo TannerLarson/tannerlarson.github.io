@@ -6,6 +6,7 @@ import {
 } from "./edhrec.js";
 import { buildDeck } from "./build.js";
 import { copyDecklist, formatMoxfield } from "./export.js";
+import { DECKBUILDER_VERSION } from "./config.js";
 
 const form = document.getElementById("build-form");
 const statusEl = document.getElementById("status");
@@ -15,6 +16,7 @@ const previewEl = document.getElementById("deck-preview");
 const buildBtn = document.getElementById("build-btn");
 const copyBtn = document.getElementById("copy-btn");
 const mixHint = document.getElementById("mix-hint");
+const versionEl = document.getElementById("app-version");
 // Accept either id so a cached HTML/JS mismatch after the lift→synergy rename
 // can't null-deref during init and leave the form without a submit handler.
 const synergyPercentInput =
@@ -26,6 +28,8 @@ const maxCardPriceInput = document.getElementById("max-card-price");
 const allowTutorsInput = document.getElementById("allow-tutors");
 const commander1 = document.getElementById("commander-1");
 const commander2 = document.getElementById("commander-2");
+
+if (versionEl) versionEl.textContent = `v${DECKBUILDER_VERSION}`;
 
 let lastDeckText = "";
 let lastCommanderSlots = commander2?.value.trim() ? 2 : 1;
